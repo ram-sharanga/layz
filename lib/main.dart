@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:layz/core/theme/app_theme.dart';
-import 'package:layz/features/splash/splash_screen.dart'; // ← changed
+import 'package:layz/features/onboarding/screens/onboarding_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,7 +29,7 @@ class LAYZApp extends StatelessWidget {
       title: 'LAYZ',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
-      home: const SplashScreen(), // ← changed
+      home: const OnboardingScreen(),
     );
   }
 }
