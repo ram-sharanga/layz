@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:layz/core/theme/app_colors.dart';
+import 'package:layz/features/plan/screens/weekly_schedule_screen.dart';
 
 // ─── The 3-world shell ────────────────────────────────────────────────────────
 
@@ -252,12 +253,10 @@ class _PlanTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: build Plan screen — workout schedule, routines
-    return const Center(
-      child: Text(
-        'Plan',
-        style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-      ),
+    return WeeklyScheduleScreen(
+      // TODO: replace with real goal + userId from Firebase Auth + Supabase
+      goal: 'muscle',
+      userId: 'test_user',
     );
   }
 }
