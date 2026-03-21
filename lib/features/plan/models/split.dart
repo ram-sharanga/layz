@@ -135,6 +135,8 @@ class SplitGenerator {
         day: day,
         routineName: schedule[day],
         isToday: day == today,
+        // TODO: REMOVE AFTER UI TESTING
+    isCompleted: day == WeekDay.monday || day == WeekDay.friday,
       );
     }).toList();
   }
