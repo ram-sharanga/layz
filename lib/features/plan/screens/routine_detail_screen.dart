@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:layz/core/theme/app_colors.dart';
 import 'package:layz/features/plan/models/exercise.dart';
 import 'package:layz/features/plan/models/routine.dart';
+import 'package:layz/features/plan/screens/active_workout_screen.dart';
 import 'package:layz/features/plan/screens/exercise_detail_screen.dart';
 import 'package:layz/features/plan/screens/exercise_library_screen.dart';
 
@@ -25,8 +26,6 @@ class RoutineDetailScreen extends StatefulWidget {
 
 class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
   late Routine _routine;
-
-  // Tracks which exercises are supersetted with the next one
   final Set<String> _supersetIds = {};
 
   @override
@@ -48,9 +47,7 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
 
   void _removeExercise(String id) {
     setState(() {
-      final exercises = _routine.exercises
-          .where((e) => e.id != id)
-          .toList();
+      final exercises = _routine.exercises.where((e) => e.id != id).toList();
       _routine = _routine.copyWith(exercises: exercises);
     });
   }
@@ -91,71 +88,151 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
     );
   }
 
+  void _startWorkout() {
+    HapticFeedback.mediumImpact();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ActiveWorkoutScreen(
+          routine: _routine,
+          goal: widget.goal,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
         children: [
 
-          // ── Header ──────────────────────────────────
+          // ── Header ────────────────────────────────────────────────────────
           Container(
-            padding: EdgeInsets.fromLTRB(20, topPad + 16, 20, 16),
-            decoration: const BoxDecoration(
+            padding: EdgeInsets.fromLTRB(20, topPad + 16, 20, 20),
+            decoration: BoxDecoration(
+              color: AppColors.background,
               border: Border(
-                bottom: BorderSide(color: AppColors.divider),
+                bottom: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
               ),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  child: const Icon(
-                    Icons.arrow_back,
-                    color: AppColors.textPrimary,
-                    size: 22,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _routine.name,
-                        style: GoogleFonts.dmSans(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w700,
+                // Back + exercise count row
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.divider),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back,
                           color: AppColors.textPrimary,
+                          size: 18,
                         ),
                       ),
-                      Text(
-                        _routine.muscleGroupLabel,
+                    ),
+                    const Spacer(),
+                    // Estimated time pill
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.timer_outlined,
+                            size: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            _routine.estimatedLabel,
+                            style: GoogleFonts.dmSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    // Exercise count pill
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: AppColors.surface,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.divider),
+                      ),
+                      child: Text(
+                        '${_routine.exerciseCount} exercises',
                         style: GoogleFonts.dmSans(
                           fontSize: 12,
+                          fontWeight: FontWeight.w500,
                           color: AppColors.textSecondary,
                         ),
                       ),
-                    ],
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 20),
+
+                // Routine name
+                Text(
+                  _routine.name,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -1,
+                    height: 1,
                   ),
                 ),
+
+                const SizedBox(height: 6),
+
+                // Muscle groups
                 Text(
-                  '${_routine.exerciseCount} exercises',
+                  _routine.muscleGroupLabel,
                   style: GoogleFonts.dmSans(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.accent.withValues(alpha: 0.7),
+                    letterSpacing: 0.3,
                   ),
                 ),
               ],
             ),
           ),
 
-          // ── Exercise list ────────────────────────────
+          // ── Exercise list ──────────────────────────────────────────────────
           Expanded(
             child: ReorderableListView.builder(
-              padding: const EdgeInsets.only(top: 8, bottom: 100),
+              padding: const EdgeInsets.only(top: 8, bottom: 120),
               onReorder: _onReorder,
               proxyDecorator: (child, index, animation) => Material(
                 color: Colors.transparent,
@@ -183,72 +260,56 @@ class _RoutineDetailScreenState extends State<RoutineDetailScreen> {
             ),
           ),
 
-          // ── Bottom bar ───────────────────────────────
+          // ── Bottom bar ─────────────────────────────────────────────────────
           Container(
-            padding: EdgeInsets.fromLTRB(
-              20, 16, 20,
-              MediaQuery.of(context).padding.bottom + 16,
-            ),
-            decoration: const BoxDecoration(
+            padding: EdgeInsets.fromLTRB(20, 16, 20, bottomPad + 16),
+            decoration: BoxDecoration(
               color: AppColors.background,
-              border: Border(top: BorderSide(color: AppColors.divider)),
+              border: Border(
+                top: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
+              ),
             ),
             child: Row(
               children: [
-                // Add exercise
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _openLibraryToAdd,
-                    child: Container(
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.divider),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.add,
-                            color: AppColors.accent,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Add exercise',
-                            style: GoogleFonts.dmSans(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.accent,
-                            ),
-                          ),
-                        ],
-                      ),
+                // Add exercise — secondary, compact
+                GestureDetector(
+                  onTap: _openLibraryToAdd,
+                  child: Container(
+                    height: 52,
+                    width: 52,
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: AppColors.divider),
+                    ),
+                    child: const Icon(
+                      Icons.add,
+                      color: AppColors.textSecondary,
+                      size: 20,
                     ),
                   ),
                 ),
 
                 const SizedBox(width: 12),
 
-                // Start workout
+                // Start — primary, dominant
                 Expanded(
                   child: GestureDetector(
-                    onTap: () {
-                      // TODO: navigate to warmup then active workout
-                    },
+                    onTap: _startWorkout,
                     child: Container(
-                      height: 48,
+                      height: 52,
                       decoration: BoxDecoration(
                         color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       child: Center(
                         child: Text(
-                          'START',
+                          'START WORKOUT',
                           style: GoogleFonts.dmSans(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
                             letterSpacing: 2,
                             color: AppColors.background,
                           ),
@@ -294,11 +355,11 @@ class _ExerciseRow extends StatelessWidget {
       children: [
         Dismissible(
           key: ValueKey('dismiss_${routineExercise.id}'),
-          direction: DismissDirection.endToStart,
+          direction: DismissDirection.startToEnd,
           background: Container(
-            alignment: Alignment.centerRight,
-            padding: const EdgeInsets.only(right: 24),
-            color: Colors.red.withValues(alpha: 0.15),
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.only(left: 20),
+            color: Colors.red.withValues(alpha: 0.12),
             child: const Icon(
               Icons.delete_outline,
               color: Colors.red,
@@ -309,25 +370,25 @@ class _ExerciseRow extends StatelessWidget {
           child: GestureDetector(
             onTap: onTap,
             child: Container(
-              padding: const EdgeInsets.fromLTRB(20, 14, 12, 14),
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
               color: AppColors.background,
               child: Row(
                 children: [
-
-                  // Index number
+                  // Index
                   SizedBox(
-                    width: 24,
+                    width: 22,
                     child: Text(
                       '${index + 1}',
                       style: GoogleFonts.dmSans(
-                        fontSize: 13,
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w500,
+                        fontSize: 12,
+                        color: AppColors.textSecondary
+                            .withValues(alpha: 0.4),
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
 
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 14),
 
                   // Exercise info
                   Expanded(
@@ -342,20 +403,45 @@ class _ExerciseRow extends StatelessWidget {
                             color: AppColors.textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 3),
-                        Text(
-                          '${routineExercise.setsLabel} · '
-                          '${routineExercise.exercise.equipmentLabel}',
-                          style: GoogleFonts.dmSans(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(
+                              routineExercise.setsLabel,
+                              style: GoogleFonts.dmSans(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
+                              child: Container(
+                                width: 2,
+                                height: 2,
+                                decoration: BoxDecoration(
+                                  color: AppColors.textSecondary
+                                      .withValues(alpha: 0.3),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              routineExercise.repRangeLabel,
+                              style: GoogleFonts.dmSans(
+                                fontSize: 12,
+                                color: AppColors.accent
+                                    .withValues(alpha: 0.6),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
 
-                  // Superset link icon — lime, always visible
+                  // Superset link
                   if (canSuperset)
                     GestureDetector(
                       onTap: onSupersetToggle,
@@ -367,7 +453,7 @@ class _ExerciseRow extends StatelessWidget {
                           color: isSuperset
                               ? AppColors.accent
                               : AppColors.textSecondary
-                                  .withValues(alpha: 0.3),
+                                  .withValues(alpha: 0.25),
                         ),
                       ),
                     ),
@@ -375,11 +461,12 @@ class _ExerciseRow extends StatelessWidget {
                   // Drag handle
                   ReorderableDragStartListener(
                     index: index,
-                    child: const Padding(
-                      padding: EdgeInsets.all(8),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
                       child: Icon(
                         Icons.drag_handle,
-                        color: AppColors.textSecondary,
+                        color: AppColors.textSecondary
+                            .withValues(alpha: 0.3),
                         size: 18,
                       ),
                     ),
@@ -390,7 +477,7 @@ class _ExerciseRow extends StatelessWidget {
           ),
         ),
 
-        // Superset connector line
+        // Superset connector
         if (isSuperset)
           Padding(
             padding: const EdgeInsets.only(left: 56),
@@ -399,14 +486,14 @@ class _ExerciseRow extends StatelessWidget {
                 Container(
                   width: 2,
                   height: 12,
-                  color: AppColors.accent.withValues(alpha: 0.6),
+                  color: AppColors.accent.withValues(alpha: 0.5),
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'superset',
                   style: GoogleFonts.dmSans(
                     fontSize: 10,
-                    color: AppColors.accent.withValues(alpha: 0.7),
+                    color: AppColors.accent.withValues(alpha: 0.6),
                     letterSpacing: 1,
                   ),
                 ),
@@ -414,12 +501,12 @@ class _ExerciseRow extends StatelessWidget {
             ),
           ),
 
-        // Divider between exercises
+        // Divider
         if (!isSuperset)
-          const Divider(
+          Divider(
             height: 1,
             indent: 56,
-            color: AppColors.divider,
+            color: Colors.white.withValues(alpha: 0.04),
           ),
       ],
     );
