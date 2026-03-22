@@ -25,10 +25,15 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: PageView(
         controller: _worldController,
+        allowImplicitScrolling: true,
+        // FIX: Add this for a fluid, elastic feel
+        physics: const BouncingScrollPhysics(
+          parent: AlwaysScrollableScrollPhysics(),
+        ),
         children: const [
-          _LeftWorld(),   // index 0 — social (later)
-          _CenterWorld(), // index 1 — main / start workout
-          _RightWorld(),  // index 2 — plan · roadmap · profile
+          _LeftWorld(), // index 0
+          _CenterWorld(), // index 1
+          _RightWorld(), // index 2
         ],
       ),
     );
@@ -75,9 +80,11 @@ class _CenterWorld extends StatelessWidget {
 
             // Start workout button — centred
             Center(
-              child: _StartWorkoutButton(onTap: () {
-                // TODO: navigate to active workout screen
-              }),
+              child: _StartWorkoutButton(
+                onTap: () {
+                  // TODO: navigate to active workout screen
+                },
+              ),
             ),
 
             // Swipe hints
@@ -182,11 +189,7 @@ class _RightWorldState extends State<_RightWorld> {
       body: SafeArea(
         child: IndexedStack(
           index: _tab,
-          children: const [
-            _PlanTab(),
-            _RoadmapTab(),
-            _ProfileTab(),
-          ],
+          children: const [_PlanTab(), _RoadmapTab(), _ProfileTab()],
         ),
       ),
       bottomNavigationBar: _BottomNav(
@@ -213,34 +216,39 @@ class _BottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 60,
-      decoration: const BoxDecoration(
-        color: AppColors.background,
-        border: Border(top: BorderSide(color: AppColors.divider)),
-      ),
-      child: Row(
-        children: List.generate(tabs.length, (i) {
-          final active = i == current;
-          return Expanded(
-            child: GestureDetector(
-              onTap: () => onTap(i),
-              behavior: HitTestBehavior.opaque,
-              child: Center(
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 200),
-                  style: TextStyle(
-                    color: active ? AppColors.accent : AppColors.textSecondary,
-                    fontSize: 13,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                    letterSpacing: active ? 1.5 : 0.5,
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 60,
+        decoration: const BoxDecoration(
+          color: AppColors.background,
+          border: Border(top: BorderSide(color: AppColors.divider)),
+        ),
+        child: Row(
+          children: List.generate(tabs.length, (i) {
+            final active = i == current;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => onTap(i),
+                behavior: HitTestBehavior.opaque,
+                child: Center(
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 200),
+                    style: TextStyle(
+                      color: active
+                          ? AppColors.accent
+                          : AppColors.textSecondary,
+                      fontSize: 13,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                      letterSpacing: active ? 1.5 : 0.5,
+                    ),
+                    child: Text(tabs[i].toUpperCase()),
                   ),
-                  child: Text(tabs[i].toUpperCase()),
                 ),
               ),
-            ),
-          );
-        }),
+            );
+          }),
+        ),
       ),
     );
   }

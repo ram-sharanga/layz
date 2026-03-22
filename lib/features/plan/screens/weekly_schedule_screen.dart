@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:layz/core/theme/app_colors.dart';
@@ -80,12 +79,6 @@ class _WeeklyScheduleScreenState extends State<WeeklyScheduleScreen> {
   ScheduleDay get _selectedSD =>
       _schedule.firstWhere((d) => d.day == _selectedDay);
 
-  ScheduleDay? get _nextDay {
-    final idx = _schedule.indexWhere((d) => d.day == _todayDay);
-    if (idx < _schedule.length - 1) return _schedule[idx + 1];
-    return null;
-  }
-
   String get _sectionLabel {
     if (_selectedDay == _todayDay) return 'TODAY';
     final isPast = _selectedDay.index < _todayDay.index;
@@ -107,38 +100,15 @@ class _WeeklyScheduleScreenState extends State<WeeklyScheduleScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _Header(onLibraryTap: _openLibrary),
-              const SizedBox(height: 16),
+              const SizedBox(height: 24),
               _WeekGrid(
                 schedule: _schedule,
                 selectedDay: _selectedDay,
                 onDayTapped: _onDayTapped,
               ),
-              const SizedBox(height: 16),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 3,
-                      height: 14,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      _sectionLabel,
-                      style: GoogleFonts.dmSans(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white.withValues(alpha: 0.3),
-                        letterSpacing: 3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 32),
+              _SectionLabel(label: _sectionLabel),
+              const SizedBox(height: 12),
               _DayCard(
                 scheduleDay: _selectedSD,
                 routine: _selectedRoutine,
@@ -146,8 +116,6 @@ class _WeeklyScheduleScreenState extends State<WeeklyScheduleScreen> {
                 onTap: _openRoutineDetail,
                 onStart: _openRoutineDetail,
               ),
-              const SizedBox(height: 20),
-              if (_nextDay != null) _ComingUp(day: _nextDay!),
             ],
           ),
         ),
@@ -156,7 +124,40 @@ class _WeeklyScheduleScreenState extends State<WeeklyScheduleScreen> {
   }
 }
 
-// ── Header ──────────────────────────────────────────────────────────────────
+// ── Section Label ────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 16,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.25),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          label,
+          style: GoogleFonts.dmSans(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: Colors.white.withValues(alpha: 0.4),
+            letterSpacing: 3.5,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Header ───────────────────────────────────────────────────────────────────
 
 class _Header extends StatelessWidget {
   const _Header({required this.onLibraryTap});
@@ -232,37 +233,45 @@ class _WeekGrid extends StatelessWidget {
       others.add(schedule[(todayIdx + i) % 7]);
     }
 
-    const double gap = 5;
-    const double r1 = 100;
-    const double r2 = 60;
-    const double r3 = 60;
-    const double totalH = r1 + gap + r2 + gap + r3;
-
+    // All sizing is relative to available width — nothing hardcoded in pixels.
+    // Gap is 1.4% of screen width so it scales too.
     return LayoutBuilder(
       builder: (context, constraints) {
         final W = constraints.maxWidth;
-        final unit = (W - gap * 2) / 3.6;
-        final c1w = unit * 1.6;
-        final c2w = unit * 1.0;
-        final c3w = unit * 1.0;
+        final gap = (W * 0.014).roundToDouble(); // ~5px on 360w, scales up
 
-        final x1 = 0.0;
-        final x2 = c3w + gap;
-        final x3 = c3w + gap + c2w + gap;
-        final y1 = 0.0;
-        final y2 = r1 + gap;
-        final y3 = r1 + gap + r2 + gap;
+        // Column width ratios: left pair : middle pair : right hero = 1 : 1 : 1.6
+        // Total ratio units = 1 + gap + 1 + gap + 1.6 = 3.6 + 2*gap_ratio
+        // Solve: cSmall = (W - 2*gap) / 3.6
+        final cSmall = (W - 2 * gap) / 3.6;
+        final cHero = cSmall * 1.6;
+
+        // Row height ratios: top : mid : bottom = 1.6 : 1 : 1
+        // Total ratio units = 1.6 + 1 + 1 + 2*gap = 3.6 + 2*gap
+        // We let height = width of the two small columns + gaps (square-ish feel)
+        final rShort = cSmall * 0.75; // proportional to column width
+        final rTall = rShort * 1.6; // maintains the tall:short = 1.6:1 ratio
+        final totalH = rTall + rShort * 2 + gap * 2;
+
+        final x0 = 0.0;
+        final x1 = cSmall + gap;
+        final x2 = cSmall * 2 + gap * 2; // hero starts here
+
+        final y0 = 0.0;
+        final y1 = rTall + gap;
+        final y2 = rTall + rShort + gap * 2;
 
         return SizedBox(
           height: totalH,
           child: Stack(
-            clipBehavior: Clip.none,
+            clipBehavior: Clip.hardEdge,
             children: [
+              // Hero tile — today, spans top two rows
               Positioned(
-                left: x3,
-                top: y1,
-                width: c1w,
-                height: r1 + gap + r2,
+                left: x2,
+                top: y0,
+                width: cHero,
+                height: rTall + gap + rShort,
                 child: GestureDetector(
                   onTap: () => onDayTapped(today.day),
                   child: _TodayHeroTile(
@@ -271,66 +280,72 @@ class _WeekGrid extends StatelessWidget {
                   ),
                 ),
               ),
+              // Row 1, col 0
               Positioned(
-                left: x1,
-                top: y1,
-                width: c2w,
-                height: r1,
+                left: x0,
+                top: y0,
+                width: cSmall,
+                height: rTall,
                 child: _DayTile(
                   day: others[0],
                   isSelected: selectedDay == others[0].day,
                   onTap: () => onDayTapped(others[0].day),
                 ),
               ),
+              // Row 1, col 1
               Positioned(
-                left: x2,
-                top: y1,
-                width: c3w,
-                height: r1,
+                left: x1,
+                top: y0,
+                width: cSmall,
+                height: rTall,
                 child: _DayTile(
                   day: others[1],
                   isSelected: selectedDay == others[1].day,
                   onTap: () => onDayTapped(others[1].day),
                 ),
               ),
+              // Row 2, col 0
               Positioned(
-                left: x1,
-                top: y2,
-                width: c2w,
-                height: r2,
+                left: x0,
+                top: y1,
+                width: cSmall,
+                height: rShort,
                 child: _DayTile(
                   day: others[2],
                   isSelected: selectedDay == others[2].day,
                   onTap: () => onDayTapped(others[2].day),
                 ),
               ),
+              // Row 2, col 1
               Positioned(
-                left: x2,
-                top: y2,
-                width: c3w,
-                height: r2,
+                left: x1,
+                top: y1,
+                width: cSmall,
+                height: rShort,
                 child: _DayTile(
                   day: others[3],
                   isSelected: selectedDay == others[3].day,
                   onTap: () => onDayTapped(others[3].day),
                 ),
               ),
+              // Row 3, col 0+1 merged (wide short tile)
               Positioned(
-                left: x1,
-                top: y3,
-                width: c2w + gap + c3w,
-                height: r3,
+                left: x0,
+                top: y2,
+                width: cSmall * 2 + gap,
+                height: rShort,
                 child: _DayTile(
                   day: others[4],
                   isSelected: selectedDay == others[4].day,
                   onTap: () => onDayTapped(others[4].day),
                 ),
               ),
+              // Row 3, hero col (short)
               Positioned(
-                left: x3,
-                top: y3,
-                width: c1w,
-                height: r3,
+                left: x2,
+                top: y2,
+                width: cHero,
+                height: rShort,
                 child: _DayTile(
                   day: others[5],
                   isSelected: selectedDay == others[5].day,
@@ -382,6 +397,11 @@ class _TodayHeroTileState extends State<_TodayHeroTile>
 
   @override
   Widget build(BuildContext context) {
+    // Derive display name — show REST instead of '—' for rest days
+    final displayName = widget.day.isRest
+        ? 'REST'
+        : (widget.day.routineName?.split(' ').first.toUpperCase() ?? '?');
+
     return FadeTransition(
       opacity: _opacity,
       child: Container(
@@ -411,11 +431,10 @@ class _TodayHeroTileState extends State<_TodayHeroTile>
             ),
             const SizedBox(height: 4),
             Text(
-              widget.day.isRest
-                  ? '—'
-                  : (widget.day.routineName?.split(' ').first.toUpperCase() ??
-                        '?'),
+              displayName,
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: GoogleFonts.dmSans(
                 fontSize: 28,
                 fontWeight: FontWeight.w900,
@@ -493,6 +512,8 @@ class _DayTile extends StatelessWidget {
                 children: [
                   Text(
                     day.day.short.toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: GoogleFonts.dmSans(
                       fontSize: 9,
                       fontWeight: FontWeight.w700,
@@ -506,6 +527,8 @@ class _DayTile extends StatelessWidget {
                       day.isRest
                           ? 'REST'
                           : (day.routineName?.split(' ').first ?? ''),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.dmSans(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,
@@ -672,6 +695,22 @@ class _DayCardState extends State<_DayCard> {
     final glowColor = isRest ? Colors.grey : AppColors.accent;
     final parallaxMultiplier = isRest ? 0.3 : 1.0;
 
+    // Card height is fixed so rest vs workout, today vs other — all identical height.
+    // Internally we use a Stack with Positioned elements so nothing shifts:
+    //   • Day label  — pinned top-left
+    //   • Title row  — always vertically centered in the card
+    //   • Muscles    — pinned bottom-left, only rendered when non-empty
+    // Play button sits in the title row alongside the display name.
+    // Since both display name and button are 60px tall and CrossAxisAlignment.start,
+    // their tops are locked — no shift whether button is present or not.
+    const double cardHeight = 150.0;
+    const double hPad = 24.0;
+    const double labelTop = 22.0;
+    // Center of card minus half of title height (60px font, height:1.0 = 60px)
+    const double titleCenterY = cardHeight / 2;
+    const double titleTop = titleCenterY - 30.0; // 30 = 60/2
+    const double musclesBottom = 18.0;
+
     return GestureDetector(
       onTapDown: _handleTapDown,
       onTapUp: _handleTapUp,
@@ -681,7 +720,7 @@ class _DayCardState extends State<_DayCard> {
         duration: const Duration(milliseconds: 120),
         curve: Curves.easeOutCubic,
         child: SizedBox(
-          height: 160,
+          height: cardHeight,
           child: Container(
             width: double.infinity,
             padding: const EdgeInsets.all(0.5),
@@ -705,6 +744,7 @@ class _DayCardState extends State<_DayCard> {
               clipBehavior: Clip.hardEdge,
               child: Stack(
                 children: [
+                  // ── Parallax glows ─────────────────────────────────────────
                   Positioned.fill(
                     child: ValueListenableBuilder<Offset>(
                       valueListenable: _bgOffsetNotifier,
@@ -760,96 +800,106 @@ class _DayCardState extends State<_DayCard> {
                     ),
                   ),
 
-                  // top/bottom shine
+                  // ── Edge shines ────────────────────────────────────────────
                   _buildEdgeShine(top: true),
                   _buildEdgeShine(top: false),
 
-                  // ── Content ────────────────────────────────────────────────
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 28,
+                  // ── Day label — pinned top-left ────────────────────────────
+                  Positioned(
+                    top: labelTop,
+                    left: hPad,
+                    right: hPad,
+                    child: Text(
+                      dayLabel,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.25),
+                        letterSpacing: 3,
+                      ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          dayLabel,
-                          style: GoogleFonts.dmSans(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white.withValues(alpha: 0.25),
-                            letterSpacing: 3,
-                          ),
-                        ),
-                        const SizedBox(
-                          height: 4,
-                        ), // Reduced to tighten vertical group
-                        // Row specifically for Big Text and Play Button to lock center
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                displayName,
-                                style: GoogleFonts.dmSans(
-                                  fontSize: 60,
-                                  fontWeight: FontWeight.w900,
-                                  color: isRest
-                                      ? AppColors.textSecondary
-                                      : AppColors.accent,
-                                  height: 1,
-                                ),
-                              ),
-                            ),
-                            if (widget.isToday && !isRest) ...[
-                              const SizedBox(width: 12),
-                              GestureDetector(
-                                onTap: widget.onStart,
-                                child: Container(
-                                  width: 60,
-                                  height: 60,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.06),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white.withValues(
-                                        alpha: 0.2,
-                                      ),
-                                      width: 0.5,
-                                    ),
-                                  ),
-                                  child: Center(
-                                    child: Transform.translate(
-                                      offset: const Offset(2, 0),
-                                      child: CustomPaint(
-                                        size: const Size(18, 22),
-                                        painter: _PlayIconPainter(),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
+                  ),
 
-                        if (muscles.isNotEmpty) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            muscles,
+                  // ── Title row — always at fixed vertical center ────────────
+                  // Play button (60×60) is always in the Row.
+                  // On non-today or rest days it is Opacity(0) so it takes
+                  // up space without rendering — title position never shifts.
+                  Positioned(
+                    top: titleTop,
+                    left: hPad,
+                    right: hPad,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.dmSans(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.white.withValues(alpha: 0.22),
-                              letterSpacing: 0.5,
+                              fontSize: 60,
+                              fontWeight: FontWeight.w900,
+                              color: isRest
+                                  ? AppColors.textSecondary
+                                  : AppColors.accent,
+                              letterSpacing: -2,
+                              height: 1,
                             ),
                           ),
-                        ],
+                        ),
+                        const SizedBox(width: 12),
+                        // Button slot — always present, invisible when not needed
+                        Opacity(
+                          opacity: (widget.isToday && !isRest) ? 1.0 : 0.0,
+                          child: GestureDetector(
+                            onTap: (widget.isToday && !isRest)
+                                ? widget.onStart
+                                : null,
+                            child: Container(
+                              width: 60,
+                              height: 60,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.06),
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  width: 0.5,
+                                ),
+                              ),
+                              child: Center(
+                                child: Transform.translate(
+                                  offset: const Offset(2, 0),
+                                  child: CustomPaint(
+                                    size: const Size(18, 22),
+                                    painter: _PlayIconPainter(),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
+
+                  // ── Muscles — pinned bottom-left, only when present ─────────
+                  if (muscles.isNotEmpty)
+                    Positioned(
+                      bottom: musclesBottom,
+                      left: hPad,
+                      right: hPad,
+                      child: Text(
+                        muscles,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.dmSans(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white.withValues(alpha: 0.22),
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -882,8 +932,6 @@ class _DayCardState extends State<_DayCard> {
 }
 
 // ── Play icon painter ────────────────────────────────────────────────────────
-// Clean equilateral-ish triangle, white fill, no vertical bar.
-// ViewBox 0 0 18 22 — visually centred in its Size.
 
 class _PlayIconPainter extends CustomPainter {
   @override
@@ -936,99 +984,4 @@ class _StartIconPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter old) => false;
-}
-
-// ── Coming up ────────────────────────────────────────────────────────────────
-
-class _ComingUp extends StatelessWidget {
-  const _ComingUp({required this.day});
-  final ScheduleDay day;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'TOMORROW',
-          style: GoogleFonts.dmSans(
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
-            color: AppColors.divider,
-            letterSpacing: 2.5,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: AppColors.divider.withValues(alpha: 0.6),
-              width: 0.5,
-            ),
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                left: 0,
-                top: 0,
-                bottom: 0,
-                child: Container(
-                  width: 2,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(left: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 7,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.04),
-                        borderRadius: BorderRadius.circular(5),
-                        border: Border.all(
-                          color: Colors.white.withValues(alpha: 0.08),
-                          width: 0.5,
-                        ),
-                      ),
-                      child: Text(
-                        day.day.short.toUpperCase(),
-                        style: GoogleFonts.dmSans(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white.withValues(alpha: 0.25),
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        day.isRest ? 'Rest Day' : (day.routineName ?? '—'),
-                        style: GoogleFonts.dmSans(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: const Color(0xFF282828),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
 }
