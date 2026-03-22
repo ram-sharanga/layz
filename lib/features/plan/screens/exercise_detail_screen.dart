@@ -1,5 +1,3 @@
-// lib/features/plan/screens/exercise_detail_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
