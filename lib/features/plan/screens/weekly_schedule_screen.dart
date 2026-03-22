@@ -621,14 +621,14 @@ class _DayCardState extends State<_DayCard> {
       if (!mounted) return;
 
       final targetOffset = Offset(
-        (-e.x * 4.0).clamp(-32.0, 32.0),
-        (e.y * 4.0).clamp(-32.0, 32.0),
+        (-e.x * 6.0).clamp(-48.0, 48.0),
+        (e.y * 6.0).clamp(-48.0, 48.0),
       );
 
       _bgOffsetNotifier.value = Offset.lerp(
         _bgOffsetNotifier.value,
         targetOffset,
-        0.15,
+        0.08,
       )!;
     });
   }
@@ -714,7 +714,7 @@ class _DayCardState extends State<_DayCard> {
                           children: [
                             Positioned.fill(
                               child: Transform.translate(
-                                offset: effectiveOffset * 0.4,
+                                offset: effectiveOffset * 0.3,
                                 child: Align(
                                   alignment: const Alignment(0.6, -0.4),
                                   child: Container(
@@ -799,7 +799,6 @@ class _DayCardState extends State<_DayCard> {
                                   color: isRest
                                       ? AppColors.textSecondary
                                       : AppColors.accent,
-                                  letterSpacing: -2,
                                   height: 1,
                                 ),
                               ),
