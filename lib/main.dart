@@ -1,35 +1,34 @@
+// lib/main.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:layz/core/theme/app_theme.dart';
-import 'package:layz/features/onboarding/screens/onboarding_screen.dart';
+import 'core/theme/app_theme.dart';
+import 'features/onboarding/screens/onboarding_screen.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent, // ← add this
-      statusBarIconBrightness: Brightness.light, // ← add this
-    ),
-  );
-
-  // TODO: await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  runApp(const LAYZApp());
+  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+  runApp(const LayzApp());
 }
 
-class LAYZApp extends StatelessWidget {
-  const LAYZApp({super.key});
+class LayzApp extends StatelessWidget {
+  const LayzApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'LAYZ',
+      title:                    'LAYZ',
+      theme:                    AppTheme.dark,
+      home:                     const OnboardingScreen(),
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark,
-      home: const OnboardingScreen(),
+      builder: (context, child) {
+        // Lock text scale factor — prevents OS font size from breaking layout
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+          child: child!,
+        );
+      },
     );
   }
 }

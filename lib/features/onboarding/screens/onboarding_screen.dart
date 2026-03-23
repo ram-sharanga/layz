@@ -1,3 +1,6 @@
+// lib/features/onboarding/screens/onboarding_screen.dart
+
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -5,15 +8,8 @@ import 'package:layz/core/theme/app_colors.dart';
 import 'package:layz/features/home/home_screen.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// OnboardingScreen — single page, three questions, zero scroll
-// Age picker | Bio profile | Goal → motivational message → let's go
+// OnboardingScreen — 3 steps: age, bio, goal
 // ─────────────────────────────────────────────────────────────────────────────
-
-class OnboardingData {
-  int? age;
-  String? bio; // 'male' | 'female' | 'other'
-  String? goal; // 'lean' | 'muscle' | 'fit'
-}
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -23,389 +19,309 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen>
-    with SingleTickerProviderStateMixin {
-  final OnboardingData _data = OnboardingData();
+    with TickerProviderStateMixin {
+  final PageController _page = PageController();
+  int _step = 0;
 
-  late final FixedExtentScrollController _ageController;
-  static const int _minAge = 13;
-  static const int _maxAge = 80;
-  static const int _defaultAge = 22;
+  // Data
+  int    _age = 22;
+  String _bio = 'male';
+  String _goal = 'muscle';
 
-  late final AnimationController _motiveCtrl;
-  late final Animation<double> _motiveFade;
-  late final Animation<Offset> _motiveSlide;
-
-  bool get _canProceed =>
-      _data.age != null && _data.bio != null && _data.goal != null;
+  // Animations
+  late AnimationController _progressCtrl;
+  late Animation<double>   _progressAnim;
 
   @override
   void initState() {
     super.initState();
-    _data.age = _defaultAge;
-    _ageController = FixedExtentScrollController(
-      initialItem: _defaultAge - _minAge,
-    );
-    _motiveCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 550),
-    );
-    _motiveFade = CurvedAnimation(parent: _motiveCtrl, curve: Curves.easeOut);
-    _motiveSlide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _motiveCtrl, curve: Curves.easeOut));
+    _progressCtrl = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 400));
+    _progressAnim = Tween<double>(begin: 0, end: 1 / 3)
+        .animate(CurvedAnimation(parent: _progressCtrl, curve: Curves.easeOut));
+    _progressCtrl.forward();
   }
 
   @override
   void dispose() {
-    _ageController.dispose();
-    _motiveCtrl.dispose();
+    _page.dispose();
+    _progressCtrl.dispose();
     super.dispose();
   }
 
-  void _selectGoal(String goal) {
-    setState(() => _data.goal = goal);
-    HapticFeedback.lightImpact();
-    _motiveCtrl.forward(from: 0);
+  void _next() {
+    HapticFeedback.mediumImpact();
+    if (_step < 2) {
+      _step++;
+      _page.animateToPage(_step,
+          duration: const Duration(milliseconds: 380),
+          curve: Curves.easeInOut);
+      final target = (_step + 1) / 3;
+      _progressAnim = Tween<double>(
+              begin: _progressAnim.value, end: target)
+          .animate(CurvedAnimation(
+              parent: _progressCtrl..reset()..forward(),
+              curve: Curves.easeOut));
+      setState(() {});
+    } else {
+      _finish();
+    }
   }
 
-  void _proceed() {
-    if (!_canProceed) return;
-    HapticFeedback.mediumImpact();
-    // TODO: upsert _data to Supabase, set onboarding_complete = true
+  void _back() {
+    if (_step > 0) {
+      HapticFeedback.selectionClick();
+      _step--;
+      _page.animateToPage(_step,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeInOut);
+      final target = (_step + 1) / 3;
+      _progressAnim = Tween<double>(
+              begin: _progressAnim.value, end: target)
+          .animate(CurvedAnimation(
+              parent: _progressCtrl..reset()..forward(),
+              curve: Curves.easeOut));
+      setState(() {});
+    }
+  }
+
+  void _finish() {
+    HapticFeedback.heavyImpact();
+    // TODO: save to Supabase — for now just navigate
     Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (_, anim, __) =>
-            FadeTransition(opacity: anim, child: const HomeScreen()),
-        transitionDuration: const Duration(milliseconds: 600),
-      ),
+      MaterialPageRoute(builder: (_) => const HomeScreen()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final mq = MediaQuery.of(context);
-    final topPad = mq.padding.top;
-    final screenH = mq.size.height;
+    final topPad = MediaQuery.of(context).padding.top;
+    final botPad = MediaQuery.of(context).padding.bottom;
 
-    return SafeArea(
-      top: false,
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        body: Padding(
-          padding: EdgeInsets.fromLTRB(20, topPad + 20, 20, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Text(
-                'Tell us about\nyourself.',
-                style: GoogleFonts.dmSans(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                  height: 1.2,
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ── Top row: Age + Bio ────────────────────────
-              SizedBox(
-                height: screenH * 0.27,
-                child: Row(
-                  children: [
-                    // Age
-                    Expanded(
-                      flex: 4,
-                      child: _AgeBox(
-                        controller: _ageController,
-                        minAge: _minAge,
-                        maxAge: _maxAge,
-                        onChanged: (v) => setState(() => _data.age = v),
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: Column(
+        children: [
+          // Progress bar
+          SizedBox(height: topPad + 20),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                if (_step > 0)
+                  GestureDetector(
+                    onTap: _back,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 14),
+                      child: Icon(Icons.arrow_back,
+                          color: AppColors.textSecondary, size: 20),
+                    ),
+                  ),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: Container(
+                      height: 3,
+                      color: Colors.white.withValues(alpha: 0.08),
+                      child: AnimatedBuilder(
+                        animation: _progressAnim,
+                        builder: (_, __) => FractionallySizedBox(
+                          alignment: Alignment.centerLeft,
+                          widthFactor: _progressAnim.value,
+                          child: Container(color: AppColors.accent),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    // Bio
-                    Expanded(
-                      flex: 6,
-                      child: _BioBox(
-                        selected: _data.bio,
-                        onSelected: (v) {
-                          setState(() => _data.bio = v);
-                          HapticFeedback.lightImpact();
-                        },
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // ── Goal label ────────────────────────────────
-              Text(
-                'YOUR GOAL',
-                style: GoogleFonts.dmSans(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSecondary,
-                  letterSpacing: 2.5,
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // ── Goal tiles ────────────────────────────────
-              Row(
-                children: [
-                  _GoalTile(
-                    label: 'Get lean',
-                    sub: 'Burn fat',
-                    value: 'lean',
-                    selected: _data.goal == 'lean',
-                    onTap: () => _selectGoal('lean'),
                   ),
-                  const SizedBox(width: 8),
-                  _GoalTile(
-                    label: 'Build muscle',
-                    sub: 'Get strong',
-                    value: 'muscle',
-                    selected: _data.goal == 'muscle',
-                    onTap: () => _selectGoal('muscle'),
-                  ),
-                  const SizedBox(width: 8),
-                  _GoalTile(
-                    label: 'Get fit',
-                    sub: 'Stay active',
-                    value: 'fit',
-                    selected: _data.goal == 'fit',
-                    onTap: () => _selectGoal('fit'),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 18),
-
-              // ── Motivation message ────────────────────────
-              FadeTransition(
-                opacity: _motiveFade,
-                child: SlideTransition(
-                  position: _motiveSlide,
-                  child: const _Motivation(),
                 ),
-              ),
-
-              const Spacer(),
-
-              // ── CTA ──────────────────────────────────────
-              _CtaButton(enabled: _canProceed, onTap: _proceed),
-
-              const SizedBox(height: 32),
-            ],
+                const SizedBox(width: 14),
+                Text('${_step + 1}/3',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 11, color: AppColors.textSecondary)),
+              ],
+            ),
           ),
-        ),
+          const SizedBox(height: 8),
+
+          // Pages
+          Expanded(
+            child: PageView(
+              controller: _page,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _AgeStep(
+                  age:       _age,
+                  onChanged: (v) => setState(() => _age = v),
+                ),
+                _BioStep(
+                  bio:       _bio,
+                  onChanged: (v) => setState(() => _bio = v),
+                ),
+                _GoalStep(
+                  goal:      _goal,
+                  onChanged: (v) => setState(() => _goal = v),
+                ),
+              ],
+            ),
+          ),
+
+          // Continue button
+          Padding(
+            padding: EdgeInsets.fromLTRB(24, 0, 24, botPad + 24),
+            child: GestureDetector(
+              onTap: _next,
+              child: Container(
+                height: 56,
+                decoration: BoxDecoration(
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Center(
+                  child: Text(
+                    _step < 2 ? 'CONTINUE' : 'START YOUR JOURNEY',
+                    style: GoogleFonts.dmSans(
+                      fontSize: 13, fontWeight: FontWeight.w800,
+                      letterSpacing: 2, color: AppColors.background,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Age drum-roller box
+// Step 1 — Age drum
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _AgeBox extends StatelessWidget {
-  const _AgeBox({
-    required this.controller,
-    required this.minAge,
-    required this.maxAge,
-    required this.onChanged,
-  });
-
-  final FixedExtentScrollController controller;
-  final int minAge;
-  final int maxAge;
+class _AgeStep extends StatefulWidget {
+  const _AgeStep({required this.age, required this.onChanged});
+  final int age;
   final ValueChanged<int> onChanged;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: Stack(
-        children: [
-          // Drum roller
-          ListWheelScrollView.useDelegate(
-            controller: controller,
-            itemExtent: 46,
-            physics: const FixedExtentScrollPhysics(),
-            perspective: 0.003,
-            diameterRatio: 1.5,
-            onSelectedItemChanged: (i) => onChanged(minAge + i),
-            childDelegate: ListWheelChildBuilderDelegate(
-              childCount: maxAge - minAge + 1,
-              builder: (_, i) => Center(
-                child: Text(
-                  '${minAge + i}',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Lime selection band
-          Center(
-            child: IgnorePointer(
-              child: Container(
-                height: 46,
-                decoration: BoxDecoration(
-                  border: Border.symmetric(
-                    horizontal: BorderSide(
-                      color: AppColors.accent.withValues(alpha: 0.4),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Top fade-out
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 60,
-            child: IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      AppColors.surface,
-                      AppColors.surface.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Bottom fade-out + label
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 60,
-            child: IgnorePointer(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      AppColors.surface,
-                      AppColors.surface.withValues(alpha: 0),
-                    ],
-                  ),
-                ),
-                alignment: Alignment.bottomCenter,
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Text(
-                  'AGE',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary,
-                    letterSpacing: 2,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  State<_AgeStep> createState() => _AgeStepState();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Bio picker box — stacked rows, looks like the age box's sibling
-// ─────────────────────────────────────────────────────────────────────────────
+class _AgeStepState extends State<_AgeStep> {
+  late FixedExtentScrollController _ctrl;
+  static const _minAge = 13;
+  static const _maxAge = 80;
 
-class _BioBox extends StatelessWidget {
-  const _BioBox({required this.selected, required this.onSelected});
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = FixedExtentScrollController(
+        initialItem: widget.age - _minAge);
+  }
 
-  final String? selected;
-  final ValueChanged<String> onSelected;
-
-  static const _opts = [
-    ('male', 'Male'),
-    ('female', 'Female'),
-    ('other', 'Prefer not to say'),
-  ];
+  @override
+  void dispose() { _ctrl.dispose(); super.dispose(); }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.divider),
-      ),
-      padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'BIOLOGY',
-            style: GoogleFonts.dmSans(
-              fontSize: 9,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-              letterSpacing: 2,
-            ),
-          ),
-          const SizedBox(height: 6),
-          ..._opts.map((opt) {
-            final active = selected == opt.$1;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => onSelected(opt.$1),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: double.infinity,
-                  margin: const EdgeInsets.only(bottom: 6),
-                  decoration: BoxDecoration(
-                    color: active ? AppColors.accent : Colors.transparent,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(
-                      color: active ? AppColors.accent : AppColors.divider,
-                    ),
+          const SizedBox(height: 32),
+          Text('How old are you?',
+              style: GoogleFonts.dmSans(
+                fontSize: 34, fontWeight: FontWeight.w900,
+                color: AppColors.textPrimary,
+                letterSpacing: -1.5, height: 1.1,
+              )),
+          const SizedBox(height: 8),
+          Text('We use this to personalise your plan.',
+              style: GoogleFonts.dmSans(
+                fontSize: 15, color: AppColors.textSecondary)),
+
+          const Spacer(),
+
+          // Drum
+          SizedBox(
+            height: 280,
+            child: Stack(
+              children: [
+                ListWheelScrollView.useDelegate(
+                  controller: _ctrl,
+                  itemExtent: 64,
+                  physics: const FixedExtentScrollPhysics(
+                      parent: BouncingScrollPhysics()),
+                  perspective: 0.002,
+                  diameterRatio: 1.8,
+                  onSelectedItemChanged: (i) {
+                    HapticFeedback.selectionClick();
+                    widget.onChanged(i + _minAge);
+                  },
+                  childDelegate: ListWheelChildBuilderDelegate(
+                    childCount: _maxAge - _minAge + 1,
+                    builder: (_, i) {
+                      final age = i + _minAge;
+                      return Center(
+                        child: Text('$age',
+                            style: GoogleFonts.dmSans(
+                              fontSize: 36, fontWeight: FontWeight.w700,
+                              color: AppColors.textPrimary,
+                            )),
+                      );
+                    },
                   ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    opt.$2,
-                    style: GoogleFonts.dmSans(
-                      fontSize: 12,
-                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-                      color: active
-                          ? AppColors.background
-                          : AppColors.textSecondary,
+                ),
+                // Selection band
+                Center(
+                  child: IgnorePointer(
+                    child: Container(
+                      height: 64,
+                      decoration: BoxDecoration(
+                        border: Border.symmetric(
+                          horizontal: BorderSide(
+                            color: AppColors.accent.withValues(alpha: 0.4)),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            );
-          }),
+                // Top fade
+                Positioned(
+                  top: 0, left: 0, right: 0, height: 100,
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [AppColors.background, Colors.transparent],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                // Bottom fade
+                Positioned(
+                  bottom: 0, left: 0, right: 0, height: 100,
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                          colors: [AppColors.background, Colors.transparent],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const Spacer(),
         ],
       ),
     );
@@ -413,116 +329,133 @@ class _BioBox extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Goal tile
+// Step 2 — Bio (biological sex)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _GoalTile extends StatelessWidget {
-  const _GoalTile({
+class _BioStep extends StatelessWidget {
+  const _BioStep({required this.bio, required this.onChanged});
+  final String bio;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 32),
+          Text('Your biology',
+              style: GoogleFonts.dmSans(
+                fontSize: 34, fontWeight: FontWeight.w900,
+                color: AppColors.textPrimary,
+                letterSpacing: -1.5, height: 1.1,
+              )),
+          const SizedBox(height: 8),
+          Text('Helps us calibrate rep ranges and recovery.',
+              style: GoogleFonts.dmSans(
+                fontSize: 15, color: AppColors.textSecondary)),
+
+          const Spacer(),
+
+          _BioOption(
+            label:       'Male',
+            description: 'Higher baseline testosterone — more aggressive progression',
+            emoji:       '♂',
+            selected:    bio == 'male',
+            onTap:       () => onChanged('male'),
+          ),
+          const SizedBox(height: 14),
+          _BioOption(
+            label:       'Female',
+            description: 'Higher recovery rate — volume responds well',
+            emoji:       '♀',
+            selected:    bio == 'female',
+            onTap:       () => onChanged('female'),
+          ),
+          const SizedBox(height: 14),
+          _BioOption(
+            label:       'Prefer not to say',
+            description: 'We\'ll use neutral defaults',
+            emoji:       '○',
+            selected:    bio == 'other',
+            onTap:       () => onChanged('other'),
+          ),
+
+          const Spacer(),
+        ],
+      ),
+    );
+  }
+}
+
+class _BioOption extends StatelessWidget {
+  const _BioOption({
     required this.label,
-    required this.sub,
-    required this.value,
+    required this.description,
+    required this.emoji,
     required this.selected,
     required this.onTap,
   });
-
-  final String label, sub, value;
-  final bool selected;
+  final String     label, description, emoji;
+  final bool       selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 6),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.accent : AppColors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected ? AppColors.accent : AppColors.divider,
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.dmSans(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: selected
-                      ? AppColors.background
-                      : AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                sub,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.dmSans(
-                  fontSize: 10,
-                  color: selected
-                      ? AppColors.background.withValues(alpha: 0.55)
-                      : AppColors.textSecondary,
-                ),
-              ),
-            ],
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: selected
+              ? AppColors.accent.withValues(alpha: 0.08)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? AppColors.accent.withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.07),
+            width: selected ? 1.5 : 1,
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Motivation block
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _Motivation extends StatelessWidget {
-  const _Motivation();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.only(left: 14),
-      decoration: const BoxDecoration(
-        border: Border(left: BorderSide(color: AppColors.accent, width: 2)),
-      ),
-      child: RichText(
-        text: TextSpan(
-          style: GoogleFonts.dmSans(
-            fontSize: 13,
-            color: AppColors.textSecondary,
-            height: 1.75,
-          ),
+        child: Row(
           children: [
-            const TextSpan(text: 'The first 21 days set the habit. '),
-            TextSpan(
-              text: 'Show up',
-              style: GoogleFonts.dmSans(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
+            Text(emoji,
+                style: TextStyle(
+                  fontSize: 24,
+                  color: selected
+                      ? AppColors.accent
+                      : Colors.white.withValues(alpha: 0.3),
+                )),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 16, fontWeight: FontWeight.w700,
+                        color: selected
+                            ? AppColors.accent
+                            : AppColors.textPrimary,
+                      )),
+                  const SizedBox(height: 3),
+                  Text(description,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 12, color: AppColors.textSecondary,
+                      )),
+                ],
               ),
             ),
-            const TextSpan(
-              text:
-                  ' for three weeks and your body starts '
-                  'rewarding you. By 90 days — you\'ll see it, '
-                  'feel it, own it.\n',
-            ),
-            TextSpan(
-              text: '\nNOTHING BEATS CONSISTENCY.',
-              style: GoogleFonts.dmSans(
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-                color: AppColors.accent,
-                letterSpacing: 2,
+            if (selected)
+              Container(
+                width: 22, height: 22,
+                decoration: const BoxDecoration(
+                  color: AppColors.accent, shape: BoxShape.circle),
+                child: const Icon(Icons.check, size: 13, color: Colors.black),
               ),
-            ),
           ],
         ),
       ),
@@ -531,37 +464,123 @@ class _Motivation extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CTA button
+// Step 3 — Goal
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _CtaButton extends StatelessWidget {
-  const _CtaButton({required this.enabled, required this.onTap});
+class _GoalStep extends StatelessWidget {
+  const _GoalStep({required this.goal, required this.onChanged});
+  final String goal;
+  final ValueChanged<String> onChanged;
 
-  final bool enabled;
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 32),
+          Text('Your goal',
+              style: GoogleFonts.dmSans(
+                fontSize: 34, fontWeight: FontWeight.w900,
+                color: AppColors.textPrimary,
+                letterSpacing: -1.5, height: 1.1,
+              )),
+          const SizedBox(height: 8),
+          Text('This shapes your entire training split and rep ranges.',
+              style: GoogleFonts.dmSans(
+                fontSize: 15, color: AppColors.textSecondary)),
+
+          const Spacer(),
+
+          _GoalCard(
+            id:          'muscle',
+            label:       'Build Muscle',
+            description: '4–5 days/week · Heavy compound lifts · 6–12 reps · Long rests',
+            emoji:       '💪',
+            selected:    goal == 'muscle',
+            onTap:       () => onChanged('muscle'),
+          ),
+          const SizedBox(height: 14),
+          _GoalCard(
+            id:          'lean',
+            label:       'Get Lean',
+            description: '3–5 days/week · Circuit + supersets · 12–20 reps · Short rests',
+            emoji:       '⚡',
+            selected:    goal == 'lean',
+            onTap:       () => onChanged('lean'),
+          ),
+          const SizedBox(height: 14),
+          _GoalCard(
+            id:          'fit',
+            label:       'Get Fit',
+            description: '3–4 days/week · Balanced training · 10–15 reps · Moderate rests',
+            emoji:       '🎯',
+            selected:    goal == 'fit',
+            onTap:       () => onChanged('fit'),
+          ),
+
+          const Spacer(),
+        ],
+      ),
+    );
+  }
+}
+
+class _GoalCard extends StatelessWidget {
+  const _GoalCard({
+    required this.id,
+    required this.label,
+    required this.description,
+    required this.emoji,
+    required this.selected,
+    required this.onTap,
+  });
+  final String     id, label, description, emoji;
+  final bool       selected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: enabled ? onTap : null,
+      onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        width: double.infinity,
-        height: 54,
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: enabled ? AppColors.accent : AppColors.buttonDisabled,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Center(
-          child: Text(
-            "LET'S GO",
-            style: GoogleFonts.dmSans(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 3.5,
-              color: enabled ? AppColors.background : AppColors.textSecondary,
-            ),
+          color: selected
+              ? AppColors.accent.withValues(alpha: 0.08)
+              : AppColors.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: selected
+                ? AppColors.accent.withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.07),
+            width: selected ? 1.5 : 1,
           ),
+        ),
+        child: Row(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 26)),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 17, fontWeight: FontWeight.w800,
+                        color: selected ? AppColors.accent : AppColors.textPrimary,
+                      )),
+                  const SizedBox(height: 4),
+                  Text(description,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 12, color: AppColors.textSecondary, height: 1.5,
+                      )),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

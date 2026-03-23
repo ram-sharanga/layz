@@ -1,10 +1,20 @@
+// lib/features/home/home_screen.dart
+
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:layz/core/theme/app_colors.dart';
+import 'package:layz/features/plan/screens/active_workout_screen.dart';
+import 'package:layz/features/roadmap/screens/roadmap_screen.dart';
 import 'package:layz/features/plan/screens/weekly_schedule_screen.dart';
+import 'package:layz/features/plan/services/plan_service.dart';
+import 'package:layz/features/profile/screens/profile_screen.dart';
 
-// ─── The 3-world shell ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// HomeScreen — three-world shell
+// ─────────────────────────────────────────────────────────────────────────────
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -28,39 +38,59 @@ class _HomeScreenState extends State<HomeScreen> {
       body: PageView(
         controller: _worldController,
         allowImplicitScrolling: true,
-        // FIX: Add this for a fluid, elastic feel
         physics: const BouncingScrollPhysics(
           parent: AlwaysScrollableScrollPhysics(),
         ),
         children: const [
-          _LeftWorld(), // index 0
-          _CenterWorld(), // index 1
-          _RightWorld(), // index 2
+          _LeftWorld(), // index 0 — social (scaffold only)
+          _CenterWorld(), // index 1 — home (sacred)
+          _RightWorld(), // index 2 — plan / roadmap / profile
         ],
       ),
     );
   }
 }
 
-// ─── Left world (social — placeholder) ───────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Left world — social scaffold
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _LeftWorld extends StatelessWidget {
   const _LeftWorld();
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
+      backgroundColor: AppColors.background,
       body: Center(
-        child: Text(
-          'Social',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.people_outline,
+                size: 48, color: Colors.white.withValues(alpha: 0.1)),
+            const SizedBox(height: 16),
+            Text('Social World',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.white.withValues(alpha: 0.2),
+                  letterSpacing: 2,
+                )),
+            const SizedBox(height: 8),
+            Text('Coming in Phase 5',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.white.withValues(alpha: 0.1),
+                )),
+          ],
         ),
       ),
     );
   }
 }
 
-// ─── Center world (main screen) ───────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Center world — the sacred home screen
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _CenterWorld extends StatelessWidget {
   const _CenterWorld();
@@ -74,7 +104,9 @@ class _CenterWorld extends StatelessWidget {
   }
 }
 
-// ─── Main content ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Home content — animated background + start button
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _HomeContent extends StatefulWidget {
   const _HomeContent();
@@ -88,6 +120,14 @@ class _HomeContentState extends State<_HomeContent>
   late final Ticker _ticker;
   double _t = 0;
 
+  // Prefs data
+  int _streak = 0;
+  int _totalWorkouts = 0;
+  double _totalVolumeKg = 0;
+  int _totalMinutes = 0;
+  String _goal = 'muscle';
+  String _userId = 'user';
+
   @override
   void initState() {
     super.initState();
@@ -95,6 +135,20 @@ class _HomeContentState extends State<_HomeContent>
       setState(() => _t += 0.008);
     })
       ..start();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _streak = prefs.getInt('streak_count') ?? 0;
+      _totalWorkouts = prefs.getInt('total_workouts') ?? 0;
+      _totalVolumeKg = prefs.getDouble('total_volume_kg') ?? 0;
+      _totalMinutes = prefs.getInt('total_minutes') ?? 0;
+      _goal = prefs.getString('user_goal') ?? 'muscle';
+      _userId = prefs.getString('user_name') ?? 'user';
+    });
   }
 
   @override
@@ -103,65 +157,100 @@ class _HomeContentState extends State<_HomeContent>
     super.dispose();
   }
 
+  // Format volume compactly
+  String get _volumeLabel {
+    if (_totalVolumeKg >= 1000) {
+      return '${(_totalVolumeKg / 1000).toStringAsFixed(1)}t';
+    }
+    return '${_totalVolumeKg.toStringAsFixed(0)}kg';
+  }
+
+  // Average session time
+  String get _avgTimeLabel {
+    if (_totalWorkouts == 0) return '0m';
+    final avg = _totalMinutes ~/ _totalWorkouts;
+    return avg >= 60
+        ? '${avg ~/ 60}h${avg % 60 > 0 ? ' ${avg % 60}m' : ''}'
+        : '${avg}m';
+  }
+
+  // Navigate to today's workout from center START button
+  Future<void> _handleStart() async {
+    HapticFeedback.heavyImpact();
+    // Find today's routine
+    final schedule = PlanService.getSchedule(_goal);
+    final today = schedule.firstWhere(
+      (d) => d.isToday,
+      orElse: () => schedule.first,
+    );
+    if (today.isRest || today.routineName == null) {
+      // Rest day — show a brief snack then do nothing
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.surface,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.fromLTRB(16, 0, 16, 60),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+            ),
+            duration: const Duration(seconds: 2),
+            content: Text('Rest day. You\'ve earned it.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontFamily: 'DM Sans',
+                )),
+          ),
+        );
+      }
+      return;
+    }
+    final routine = PlanService.getRoutine(
+      routineName: today.routineName!,
+      userId: _userId,
+      goal: _goal,
+    );
+    if (routine == null || !mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ActiveWorkoutScreen(routine: routine, goal: _goal),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // 1 — Particle field + atmospheric background
-        Positioned.fill(
-          child: CustomPaint(painter: _AtmospherePainter(_t)),
-        ),
-
-        // 2 — Scanline overlay
-        Positioned.fill(child: _ScanlineOverlay()),
-
-        // 3 — Wordmark
-        const Positioned(
-          top: 20,
-          left: 28,
-          child: _Wordmark(),
-        ),
-
-        // 4 — Status indicator
-        const Positioned(
-          top: 28,
-          right: 28,
-          child: _StatusIndicator(),
-        ),
-
-        // 5 — Day streak
-        const Positioned(
+        Positioned.fill(child: CustomPaint(painter: _AtmospherePainter(_t))),
+        Positioned.fill(child: const _ScanlineOverlay()),
+        const Positioned(top: 20, left: 28, child: _Wordmark()),
+        const Positioned(top: 28, right: 28, child: _StatusIndicator()),
+        Positioned(
           top: 76,
           left: 28,
-          child: _StreakBar(completedDays: 5),
+          child: _StreakBar(streak: _streak),
         ),
-
-        // 6 — THE BUTTON
-        Center(
-          child: _StartButton(t: _t, onTap: () {}),
-        ),
-
-        // 7 — Stats strip
-        const Positioned(
+        Center(child: _StartButton(t: _t, onTap: _handleStart)),
+        Positioned(
           bottom: 88,
           left: 0,
           right: 0,
-          child: _StatsStrip(),
+          child: _StatsStrip(
+            sessions: _totalWorkouts,
+            volume: _volumeLabel,
+            avgTime: _avgTimeLabel,
+          ),
         ),
-
-        // 8 — Swipe hints
-        const Positioned(
-          bottom: 32,
-          left: 0,
-          right: 0,
-          child: _SwipeHints(),
-        ),
+        const Positioned(bottom: 32, left: 0, right: 0, child: _SwipeHints()),
       ],
     );
   }
 }
 
-// ─── Wordmark ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Wordmark
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _Wordmark extends StatelessWidget {
   const _Wordmark();
@@ -171,7 +260,6 @@ class _Wordmark extends StatelessWidget {
     return const Text(
       'LAYZ',
       style: TextStyle(
-        fontFamily: 'BebasNeue', // add to pubspec assets
         fontSize: 42,
         letterSpacing: 8,
         color: Color(0xFFFFFFFF),
@@ -181,7 +269,9 @@ class _Wordmark extends StatelessWidget {
   }
 }
 
-// ─── Status indicator ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Status indicator
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _StatusIndicator extends StatefulWidget {
   const _StatusIndicator();
@@ -222,39 +312,39 @@ class _StatusIndicatorState extends State<_StatusIndicator>
             width: 5,
             height: 5,
             decoration: const BoxDecoration(
-              color: Color(0xFFAAFF00),
-              shape: BoxShape.circle,
-            ),
+                color: Color(0xFFAAFF00), shape: BoxShape.circle),
           ),
         ),
         const SizedBox(width: 6),
-        const Text(
-          'READY',
-          style: TextStyle(
-            fontSize: 9,
-            letterSpacing: 2.5,
-            color: Color(0xFFAAFF00),
-            fontWeight: FontWeight.w400,
-          ),
-        ),
+        const Text('READY',
+            style: TextStyle(
+              fontSize: 9,
+              letterSpacing: 2.5,
+              color: Color(0xFFAAFF00),
+              fontWeight: FontWeight.w400,
+            )),
       ],
     );
   }
 }
 
-// ─── Streak bar ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Streak bar
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _StreakBar extends StatelessWidget {
-  const _StreakBar({required this.completedDays});
-  final int completedDays;
+  const _StreakBar({required this.streak});
+  final int streak;
 
   @override
   Widget build(BuildContext context) {
+    // Show up to 7 segments; filled = min(streak, 7)
+    final filled = streak.clamp(0, 7);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         ...List.generate(7, (i) {
-          final done = i < completedDays;
+          final done = i < filled;
           return Container(
             width: 20,
             height: 4,
@@ -263,22 +353,19 @@ class _StreakBar extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
               color: done
                   ? const Color(0xFFAAFF00)
-                  : const Color(0xFFAAFF00),
+                  : const Color(0xFFAAFF00).withValues(alpha: 0.15),
               boxShadow: done
-                  ? [
-                      const BoxShadow(
-                        color: Color(0x80AAFF00),
-                        blurRadius: 6,
-                      )
-                    ]
+                  ? [const BoxShadow(color: Color(0x80AAFF00), blurRadius: 6)]
                   : null,
             ),
           );
         }),
         const SizedBox(width: 8),
-        const Text(
-          '5 DAY STREAK',
-          style: TextStyle(
+        Text(
+          streak == 0
+              ? 'START YOUR STREAK'
+              : '$streak DAY${streak == 1 ? '' : 'S'} STREAK',
+          style: const TextStyle(
             fontSize: 8,
             letterSpacing: 1.5,
             color: Color(0x66999999),
@@ -289,7 +376,9 @@ class _StreakBar extends StatelessWidget {
   }
 }
 
-// ─── THE BUTTON ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Start button
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _StartButton extends StatefulWidget {
   const _StartButton({required this.t, required this.onTap});
@@ -304,22 +393,6 @@ class _StartButtonState extends State<_StartButton>
     with TickerProviderStateMixin {
   bool _pressed = false;
   final List<_RippleState> _ripples = [];
-  late final AnimationController _rippleCtrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _rippleCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-  }
-
-  @override
-  void dispose() {
-    _rippleCtrl.dispose();
-    super.dispose();
-  }
 
   void _handleTap() {
     widget.onTap();
@@ -343,15 +416,25 @@ class _StartButtonState extends State<_StartButton>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Orbit rings
-          _OrbitRing(size: 260, duration: 12000, reverse: false, t: widget.t, dotBottom: false),
-          _OrbitRing(size: 300, duration: 20000, reverse: true, t: widget.t, dotBottom: true),
-          _OrbitRing(size: 340, duration: 30000, reverse: false, t: widget.t, dotBottom: false),
-
-          // Breathe glow
+          _OrbitRing(
+              size: 260,
+              duration: 12000,
+              reverse: false,
+              t: widget.t,
+              dotBottom: false),
+          _OrbitRing(
+              size: 300,
+              duration: 20000,
+              reverse: true,
+              t: widget.t,
+              dotBottom: true),
+          _OrbitRing(
+              size: 340,
+              duration: 30000,
+              reverse: false,
+              t: widget.t,
+              dotBottom: false),
           _BreatheGlow(t: widget.t),
-
-          // Ripples
           ..._ripples.map((r) => AnimatedBuilder(
                 animation: r.ctrl,
                 builder: (_, __) {
@@ -362,16 +445,12 @@ class _StartButtonState extends State<_StartButton>
                     height: size,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFFAAFF00),
-                        width: 1,
-                      ),
+                      border:
+                          Border.all(color: const Color(0xFFAAFF00), width: 1),
                     ),
                   );
                 },
               )),
-
-          // The actual button
           GestureDetector(
             onTapDown: (_) => setState(() => _pressed = true),
             onTapUp: (_) => setState(() => _pressed = false),
@@ -380,7 +459,7 @@ class _StartButtonState extends State<_StartButton>
             child: AnimatedScale(
               scale: _pressed ? 0.93 : 1.0,
               duration: const Duration(milliseconds: 120),
-              child: _GlassButton(),
+              child: const _GlassButton(),
             ),
           ),
         ],
@@ -394,7 +473,9 @@ class _RippleState {
   _RippleState({required this.ctrl});
 }
 
-// ─── Glass button face ────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Glass button
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _GlassButton extends StatelessWidget {
   const _GlassButton();
@@ -409,43 +490,25 @@ class _GlassButton extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'START',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 4,
-                color: Color(0xFFAAFF00),
-                shadows: [
-                  Shadow(
-                    color: Color(0x99AAFF00),
-                    blurRadius: 20,
-                  ),
-                ],
-              ),
-            ),
+            const Text('START',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 4,
+                  color: Color(0xFFAAFF00),
+                  shadows: [Shadow(color: Color(0x99AAFF00), blurRadius: 20)],
+                )),
             const SizedBox(height: 8),
-            Container(
-              width: 20,
-              height: 0.5,
-              color: const Color(0x66AAFF00),
-            ),
+            Container(width: 20, height: 0.5, color: const Color(0x66AAFF00)),
             const SizedBox(height: 8),
-            const Text(
-              'WORKOUT',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 3,
-                color: Color(0xB3AAFF00),
-                shadows: [
-                  Shadow(
-                    color: Color(0x66AAFF00),
-                    blurRadius: 12,
-                  ),
-                ],
-              ),
-            ),
+            const Text('WORKOUT',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 3,
+                  color: Color(0xB3AAFF00),
+                  shadows: [Shadow(color: Color(0x66AAFF00), blurRadius: 12)],
+                )),
           ],
         ),
       ),
@@ -460,46 +523,51 @@ class _GlassButtonPainter extends CustomPainter {
     final center = Offset(r, r);
     final rect = Rect.fromCircle(center: center, radius: r);
 
-    // Border
-    final borderPaint = Paint()
-      ..color = const Color(0x99AAFF00)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 10;
-    canvas.drawCircle(center, r - 0.5, borderPaint);
-
     // Outer glow
-    final glowPaint = Paint()
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20)
-      ..color = const Color(0x26AAFF00);
-    canvas.drawCircle(center, r + 10, glowPaint);
+    canvas.drawCircle(
+        center,
+        r + 10,
+        Paint()
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 20)
+          ..color = const Color(0x26AAFF00));
 
-    // Glass fill — dark base
-    final basePaint = Paint()
-      ..shader = RadialGradient(
-        center: const Alignment(-0.3, -0.3),
-        radius: 1.0,
-        colors: [
-          const Color(0xFF0A0A0A),
-          const Color(0xFF000000),
-        ],
-      ).createShader(rect);
-    canvas.drawCircle(center, r - 0.75, basePaint);
-    canvas.save();
-    canvas.restore();
+    // Glass fill
+    canvas.drawCircle(
+        center,
+        r - 0.75,
+        Paint()
+          ..shader = RadialGradient(
+            center: const Alignment(-0.3, -0.3),
+            radius: 1.0,
+            colors: [const Color(0xFF0A0A0A), const Color(0xFF000000)],
+          ).createShader(rect));
+
+    // Border
+    canvas.drawCircle(
+        center,
+        r - 0.5,
+        Paint()
+          ..color = const Color(0x99AAFF00)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 10);
 
     // Inner ring
-    final innerPaint = Paint()
-      ..color = const Color(0x33AAFF00)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
-    canvas.drawCircle(center, r - 18, innerPaint);
+    canvas.drawCircle(
+        center,
+        r - 18,
+        Paint()
+          ..color = const Color(0x33AAFF00)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3);
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
-// ─── Orbit ring ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Orbit ring
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _OrbitRing extends StatelessWidget {
   const _OrbitRing({
@@ -508,99 +576,65 @@ class _OrbitRing extends StatelessWidget {
     required this.reverse,
     required this.t,
     required this.dotBottom,
-    this.dotted = false,
   });
-
   final double size;
   final int duration;
-  final bool reverse;
+  final bool reverse, dotBottom;
   final double t;
-  final bool dotBottom;
-  final bool dotted;
 
   @override
   Widget build(BuildContext context) {
     final speed = (2 * math.pi) / (duration / 10);
     final angle = reverse ? -t * speed * 125 : t * speed * 125;
-
     return SizedBox(
       width: size,
       height: size,
       child: CustomPaint(
-        painter: _OrbitRingPainter(
-          angle: angle,
-          dotted: dotted,
-          dotBottom: dotBottom,
-        ),
+        painter: _OrbitRingPainter(angle: angle, dotBottom: dotBottom),
       ),
     );
   }
 }
 
 class _OrbitRingPainter extends CustomPainter {
+  const _OrbitRingPainter({required this.angle, required this.dotBottom});
   final double angle;
-  final bool dotted;
   final bool dotBottom;
-
-  _OrbitRingPainter({
-    required this.angle,
-    required this.dotted,
-    required this.dotBottom,
-  });
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final r = size.width / 2;
 
-    // Ring
-    final paint = Paint()
-      ..color = const Color(0xFFAAFF00).withOpacity(dotted ? 0.07 : 0.12)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1;
+    canvas.drawCircle(
+        center,
+        r,
+        Paint()
+          ..color = const Color(0xFFAAFF00).withOpacity(0.12)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1);
 
-    if (dotted) {
-      // Draw dashed ring manually
-      const dashLen = 4.0;
-      const gapLen = 6.0;
-      final circumference = 2 * math.pi * r;
-      final totalDashes = (circumference / (dashLen + gapLen)).floor();
-      for (int i = 0; i < totalDashes; i++) {
-        final startA = (i / totalDashes) * 2 * math.pi;
-        final endA = startA + (dashLen / circumference) * 2 * math.pi;
-        canvas.drawArc(
-          Rect.fromCircle(center: center, radius: r),
-          startA,
-          endA - startA,
-          false,
-          paint,
-        );
-      }
-    } else {
-      canvas.drawCircle(center, r, paint);
-    }
+    final dotAngle = dotBottom ? angle + math.pi : angle;
+    final dx = center.dx + r * math.cos(dotAngle);
+    final dy = center.dy + r * math.sin(dotAngle);
 
-    // Dot
-    if (!dotted) {
-      final dotAngle = dotBottom ? angle + math.pi : angle;
-      final dotX = center.dx + r * math.cos(dotAngle);
-      final dotY = center.dy + r * math.sin(dotAngle);
-
-      final glowPaint = Paint()
-        ..color = const Color(0x80AAFF00)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
-      canvas.drawCircle(Offset(dotX, dotY), 5, glowPaint);
-
-      final dotPaint = Paint()..color = const Color(0xFFAAFF00);
-      canvas.drawCircle(Offset(dotX, dotY), 2.5, dotPaint);
-    }
+    canvas.drawCircle(
+        Offset(dx, dy),
+        5,
+        Paint()
+          ..color = const Color(0x80AAFF00)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6));
+    canvas.drawCircle(
+        Offset(dx, dy), 2.5, Paint()..color = const Color(0xFFAAFF00));
   }
 
   @override
   bool shouldRepaint(covariant _OrbitRingPainter old) => old.angle != angle;
 }
 
-// ─── Breathe glow ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Breathe glow
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _BreatheGlow extends StatelessWidget {
   const _BreatheGlow({required this.t});
@@ -610,7 +644,6 @@ class _BreatheGlow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scale = 1.0 + math.sin(t * 1.5) * 0.06;
     final opacity = 0.6 + math.sin(t * 1.5) * 0.4;
-
     return Transform.scale(
       scale: scale,
       child: Container(
@@ -630,19 +663,18 @@ class _BreatheGlow extends StatelessWidget {
   }
 }
 
-// ─── Atmosphere painter (particles + grid spokes) ─────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Atmosphere painter
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _AtmospherePainter extends CustomPainter {
   _AtmospherePainter(this.t) {
     if (_particles.isEmpty) _initParticles();
     _updateParticles(t);
   }
-
   final double t;
 
   static final List<_Particle> _particles = [];
-  static double _prevT = 0;
-  static Size _lastSize = Size.zero;
 
   static void _initParticles() {
     final rng = math.Random(42);
@@ -664,8 +696,7 @@ class _AtmospherePainter extends CustomPainter {
   }
 
   static void _updateParticles(double t) {
-    const cx = 195.0;
-    const cy = 422.0;
+    const cx = 195.0, cy = 422.0;
     for (final p in _particles) {
       p.twinklePhase += p.twinkleSpeed;
       final dx = cx - p.x;
@@ -679,7 +710,10 @@ class _AtmospherePainter extends CustomPainter {
         p.vy -= (dy / dist) * 0.003;
       }
       final spd = math.sqrt(p.vx * p.vx + p.vy * p.vy);
-      if (spd > 0.6) { p.vx *= 0.6 / spd; p.vy *= 0.6 / spd; }
+      if (spd > 0.6) {
+        p.vx *= 0.6 / spd;
+        p.vy *= 0.6 / spd;
+      }
       p.x += p.vx;
       p.y += p.vy;
       if (p.x < 0) p.x = 390;
@@ -691,92 +725,82 @@ class _AtmospherePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
+    final cx = size.width / 2, cy = size.height / 2;
 
-    // Background gradient
-    final bgGrad = RadialGradient(
-      center: Alignment.center,
-      radius: 1.2,
-      colors: [
-        const Color(0xFF080C00),
-        const Color(0xFF030600),
-        Colors.black,
-      ],
-    ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
+    // Background
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..shader = bgGrad,
+      Paint()
+        ..shader = RadialGradient(
+          center: Alignment.center,
+          radius: 1.2,
+          colors: [
+            const Color(0xFF080C00),
+            const Color(0xFF030600),
+            Colors.black
+          ],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
     );
 
-    // Subtle spokes
-    final spokeCount = 8;
-    for (int i = 0; i < spokeCount; i++) {
-      final angle = (i / spokeCount) * math.pi * 2;
-      final paint = Paint()
-        ..color = const Color(0xFFAAFF00).withOpacity(0.03)
-        ..strokeWidth = 0.5;
+    // Spokes
+    for (int i = 0; i < 8; i++) {
+      final angle = (i / 8) * math.pi * 2;
       canvas.drawLine(
         Offset(cx, cy),
         Offset(cx + math.cos(angle) * 600, cy + math.sin(angle) * 600),
-        paint,
+        Paint()
+          ..color = const Color(0xFFAAFF00).withOpacity(0.03)
+          ..strokeWidth = 0.5,
       );
     }
 
-    // Core pulse glow
+    // Core glow
     final pulse = 1.0 + math.sin(t * 1.5) * 0.04;
-    final coreGrad = RadialGradient(
-      colors: [
-        const Color(0xFFAAFF00).withOpacity(0.04),
-        const Color(0xFFAAFF00).withOpacity(0.015),
-        Colors.transparent,
-      ],
-      stops: const [0.0, 0.6, 1.0],
-    ).createShader(Rect.fromCircle(
-      center: Offset(cx, cy),
-      radius: 140 * pulse,
-    ));
     canvas.drawCircle(
       Offset(cx, cy),
       300,
-      Paint()..shader = coreGrad,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFFAAFF00).withOpacity(0.04),
+            const Color(0xFFAAFF00).withOpacity(0.015),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.6, 1.0],
+        ).createShader(
+            Rect.fromCircle(center: Offset(cx, cy), radius: 140 * pulse)),
     );
 
     // Particles
     for (final p in _particles) {
       final twinkle = 0.5 + 0.5 * math.sin(p.twinklePhase);
       final alpha = p.baseOpacity * twinkle;
-
       if (p.isLime) {
         if (twinkle > 0.8) {
-          final glow = Paint()
-            ..color = const Color(0xFFAAFF00).withOpacity(alpha * 0.4)
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
-          canvas.drawCircle(Offset(p.x, p.y), p.size * 4, glow);
+          canvas.drawCircle(
+              Offset(p.x, p.y),
+              p.size * 4,
+              Paint()
+                ..color = const Color(0xFFAAFF00).withOpacity(alpha * 0.4)
+                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
         }
-        canvas.drawCircle(
-          Offset(p.x, p.y),
-          p.size,
-          Paint()..color = const Color(0xFFAAFF00).withOpacity(alpha),
-        );
+        canvas.drawCircle(Offset(p.x, p.y), p.size,
+            Paint()..color = const Color(0xFFAAFF00).withOpacity(alpha));
       } else {
-        canvas.drawCircle(
-          Offset(p.x, p.y),
-          p.size,
-          Paint()..color = Colors.white.withOpacity(alpha * 0.5),
-        );
+        canvas.drawCircle(Offset(p.x, p.y), p.size,
+            Paint()..color = Colors.white.withOpacity(alpha * 0.5));
       }
     }
 
     // Vignette
-    final vignette = RadialGradient(
-      center: Alignment.center,
-      radius: 0.8,
-      colors: [Colors.transparent, Colors.black.withOpacity(0.85)],
-    ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawRect(
       Rect.fromLTWH(0, 0, size.width, size.height),
-      Paint()..shader = vignette,
+      Paint()
+        ..shader = RadialGradient(
+          center: Alignment.center,
+          radius: 0.8,
+          colors: [Colors.transparent, Colors.black.withOpacity(0.85)],
+        ).createShader(Rect.fromLTWH(0, 0, size.width, size.height)),
     );
   }
 
@@ -787,7 +811,6 @@ class _AtmospherePainter extends CustomPainter {
 class _Particle {
   double x, y, vx, vy, size, baseOpacity, twinkleSpeed, twinklePhase;
   bool isLime;
-
   _Particle({
     required this.x,
     required this.y,
@@ -801,16 +824,16 @@ class _Particle {
   });
 }
 
-// ─── Scanline overlay ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Scanline overlay
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _ScanlineOverlay extends StatelessWidget {
   const _ScanlineOverlay();
 
   @override
   Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: CustomPaint(painter: _ScanlinePainter()),
-    );
+    return IgnorePointer(child: CustomPaint(painter: _ScanlinePainter()));
   }
 }
 
@@ -831,21 +854,30 @@ class _ScanlinePainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter old) => false;
 }
 
-// ─── Stats strip ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Stats strip
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _StatsStrip extends StatelessWidget {
-  const _StatsStrip();
+  const _StatsStrip({
+    required this.sessions,
+    required this.volume,
+    required this.avgTime,
+  });
+  final int sessions;
+  final String volume;
+  final String avgTime;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: const [
-        _StatItem(value: '42', label: 'Sessions'),
-        _StatDivider(),
-        _StatItem(value: '6.2K', label: 'Volume'),
-        _StatDivider(),
-        _StatItem(value: '38m', label: 'Avg Time'),
+      children: [
+        _StatItem(value: '$sessions', label: 'Sessions'),
+        const _StatDivider(),
+        _StatItem(value: volume, label: 'Volume'),
+        const _StatDivider(),
+        _StatItem(value: avgTime, label: 'Avg Time'),
       ],
     );
   }
@@ -860,24 +892,20 @@ class _StatItem extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: Color(0xFFFFFFFF),
-            letterSpacing: 1,
-          ),
-        ),
+        Text(value,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFFFFFFFF),
+              letterSpacing: 1,
+            )),
         const SizedBox(height: 2),
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(
-            fontSize: 8,
-            letterSpacing: 2,
-            color: Color(0x80999999),
-          ),
-        ),
+        Text(label.toUpperCase(),
+            style: const TextStyle(
+              fontSize: 8,
+              letterSpacing: 2,
+              color: Color(0x80999999),
+            )),
       ],
     );
   }
@@ -897,7 +925,9 @@ class _StatDivider extends StatelessWidget {
   }
 }
 
-// ─── Swipe hints ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Swipe hints
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _SwipeHints extends StatelessWidget {
   const _SwipeHints();
@@ -909,32 +939,30 @@ class _SwipeHints extends StatelessWidget {
       children: const [
         Padding(
           padding: EdgeInsets.only(left: 24),
-          child: Text(
-            '← social',
-            style: TextStyle(
-              fontSize: 9,
-              letterSpacing: 2,
-              color: Color(0x33999999),
-            ),
-          ),
+          child: Text('← social',
+              style: TextStyle(
+                fontSize: 9,
+                letterSpacing: 2,
+                color: Color(0x33999999),
+              )),
         ),
         Padding(
           padding: EdgeInsets.only(right: 24),
-          child: Text(
-            'you →',
-            style: TextStyle(
-              fontSize: 9,
-              letterSpacing: 2,
-              color: Color(0x33999999),
-            ),
-          ),
+          child: Text('you →',
+              style: TextStyle(
+                fontSize: 9,
+                letterSpacing: 2,
+                color: Color(0x33999999),
+              )),
         ),
       ],
     );
   }
 }
 
-// ─── Right world (plan · roadmap · profile) ───────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Right world — Plan / Roadmap / Profile
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _RightWorld extends StatefulWidget {
   const _RightWorld();
@@ -954,7 +982,11 @@ class _RightWorldState extends State<_RightWorld> {
       body: SafeArea(
         child: IndexedStack(
           index: _tab,
-          children: const [_PlanTab(), _RoadmapTab(), _ProfileTab()],
+          children: const [
+            _PlanTab(),
+            _RoadmapTab(),
+            _ProfileTab(),
+          ],
         ),
       ),
       bottomNavigationBar: _BottomNav(
@@ -966,7 +998,9 @@ class _RightWorldState extends State<_RightWorld> {
   }
 }
 
-// ─── Bottom nav ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom nav
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _BottomNav extends StatelessWidget {
   const _BottomNav({
@@ -974,7 +1008,6 @@ class _BottomNav extends StatelessWidget {
     required this.tabs,
     required this.onTap,
   });
-
   final int current;
   final List<String> tabs;
   final ValueChanged<int> onTap;
@@ -1000,12 +1033,12 @@ class _BottomNav extends StatelessWidget {
                   child: AnimatedDefaultTextStyle(
                     duration: const Duration(milliseconds: 200),
                     style: TextStyle(
-                      color: active
-                          ? AppColors.accent
-                          : AppColors.textSecondary,
+                      color:
+                          active ? AppColors.accent : AppColors.textSecondary,
                       fontSize: 13,
                       fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                       letterSpacing: active ? 1.5 : 0.5,
+                      fontFamily: 'DM Sans',
                     ),
                     child: Text(tabs[i].toUpperCase()),
                   ),
@@ -1019,18 +1052,49 @@ class _BottomNav extends StatelessWidget {
   }
 }
 
-// ─── Tab placeholders ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab screens
+// ─────────────────────────────────────────────────────────────────────────────
 
-class _PlanTab extends StatelessWidget {
+class _PlanTab extends StatefulWidget {
   const _PlanTab();
 
   @override
+  State<_PlanTab> createState() => _PlanTabState();
+}
+
+class _PlanTabState extends State<_PlanTab> {
+  String _goal = 'muscle';
+  String _userId = 'user';
+  bool _loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPrefs();
+  }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _goal = prefs.getString('user_goal') ?? 'muscle';
+      _userId = prefs.getString('user_name') ?? 'user';
+      _loaded = true;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return WeeklyScheduleScreen(
-      // TODO: replace with real goal + userId from Firebase Auth + Supabase
-      goal: 'muscle',
-      userId: 'test_user',
-    );
+    if (!_loaded) {
+      return const Scaffold(
+        backgroundColor: AppColors.background,
+        body: Center(
+            child: CircularProgressIndicator(
+                color: AppColors.accent, strokeWidth: 2)),
+      );
+    }
+    return WeeklyScheduleScreen(goal: _goal, userId: _userId);
   }
 }
 
@@ -1039,13 +1103,7 @@ class _RoadmapTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: build Roadmap screen
-    return const Center(
-      child: Text(
-        'Roadmap',
-        style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-      ),
-    );
+    return const RoadmapScreen();
   }
 }
 
@@ -1054,13 +1112,6 @@ class _ProfileTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO: fetch user data from Supabase and display here
-    // Display: name, age, gender, goal, experience — all editable
-    return const Center(
-      child: Text(
-        'Profile',
-        style: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-      ),
-    );
+    return const ProfileScreen();
   }
 }

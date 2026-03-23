@@ -1,20 +1,18 @@
-import 'package:flutter/painting.dart';
+// lib/core/theme/app_colors.dart
 
-abstract final class AppColors {
-  static const Color _black = Color(0xFF000000);
-  static const Color _onyx = Color(0xFF111111);
-  static const Color _lime = Color(0xFFAAFF00);
-  static const Color _grey = Color(0xFF999999);
-  static const Color _white = Color(0xFFFFFFFF);
- 
-  // Semantic
-  static const Color background   = _black;
-  static const Color surface      = _onyx;
-  static const Color accent       = _lime;
-  static const Color textPrimary  = _white;
-  static const Color textSecondary = _grey;
- 
-  // Utility
-  static const Color divider = Color(0xFF222222);
-  static const Color buttonDisabled = Color(0xFF333333);
+import 'package:flutter/material.dart';
+
+class AppColors {
+  AppColors._();
+
+  static const Color background     = Color(0xFF000000);
+  static const Color surface        = Color(0xFF111111);
+  static const Color surfaceVariant = Color(0xFF1A1A1A);
+  static const Color accent         = Color(0xFFAAFF00);
+  static const Color accentDim      = Color(0xFF88CC00);
+  static const Color textPrimary    = Color(0xFFFFFFFF);
+  static const Color textSecondary  = Color(0xFF888888);
+  static const Color divider        = Color(0xFF222222);
+  static const Color buttonDisabled = Color(0xFF1C1C1C);
+  static const Color error          = Color(0xFFFF4444);
 }
