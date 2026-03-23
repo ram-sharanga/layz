@@ -1,219 +1,128 @@
 // lib/features/plan/models/split.dart
 
-// ── Enums ──────────────────────────────────────────────────────────────────
+enum SplitType { pushPullLegs, upperLower, fullBody, arnoldSplit }
 
-enum SplitType { pushPullLegs, upperLower, fullBody }
+enum SplitLabel {
+  pushPullLegs, upperLower, fullBody;
+
+  static SplitLabel fromGoal(String goal) {
+    switch (goal) {
+      case 'muscle': return SplitLabel.pushPullLegs;
+      case 'lean':   return SplitLabel.fullBody;
+      case 'fit':    return SplitLabel.upperLower;
+      default:       return SplitLabel.pushPullLegs;
+    }
+  }
+}
 
 enum WeekDay {
-  monday,
-  tuesday,
-  wednesday,
-  thursday,
-  friday,
-  saturday,
-  sunday;
+  monday, tuesday, wednesday, thursday, friday, saturday, sunday;
 
-  // Convert from DateTime.weekday (1=Mon, 7=Sun)
-  // Static method lives here — identity logic belongs in the enum, not an extension
+  String get full {
+    switch (this) {
+      case WeekDay.monday:    return 'Monday';
+      case WeekDay.tuesday:   return 'Tuesday';
+      case WeekDay.wednesday: return 'Wednesday';
+      case WeekDay.thursday:  return 'Thursday';
+      case WeekDay.friday:    return 'Friday';
+      case WeekDay.saturday:  return 'Saturday';
+      case WeekDay.sunday:    return 'Sunday';
+    }
+  }
+
+  String get short {
+    switch (this) {
+      case WeekDay.monday:    return 'Mon';
+      case WeekDay.tuesday:   return 'Tue';
+      case WeekDay.wednesday: return 'Wed';
+      case WeekDay.thursday:  return 'Thu';
+      case WeekDay.friday:    return 'Fri';
+      case WeekDay.saturday:  return 'Sat';
+      case WeekDay.sunday:    return 'Sun';
+    }
+  }
+
   static WeekDay fromDateTime(DateTime dt) {
+    // DateTime.weekday: 1=Mon … 7=Sun
     return WeekDay.values[dt.weekday - 1];
   }
 }
 
-// ── Extensions ─────────────────────────────────────────────────────────────
-
-extension WeekDayLabel on WeekDay {
-  String get short {
-    switch (this) {
-      case WeekDay.monday:
-        return 'Mon';
-      case WeekDay.tuesday:
-        return 'Tue';
-      case WeekDay.wednesday:
-        return 'Wed';
-      case WeekDay.thursday:
-        return 'Thu';
-      case WeekDay.friday:
-        return 'Fri';
-      case WeekDay.saturday:
-        return 'Sat';
-      case WeekDay.sunday:
-        return 'Sun';
-    }
-  }
-
-  String get full {
-    switch (this) {
-      case WeekDay.monday:
-        return 'Monday';
-      case WeekDay.tuesday:
-        return 'Tuesday';
-      case WeekDay.wednesday:
-        return 'Wednesday';
-      case WeekDay.thursday:
-        return 'Thursday';
-      case WeekDay.friday:
-        return 'Friday';
-      case WeekDay.saturday:
-        return 'Saturday';
-      case WeekDay.sunday:
-        return 'Sunday';
-    }
-  }
-}
-
-extension SplitLabel on SplitType {
-  String get name {
-    switch (this) {
-      case SplitType.pushPullLegs:
-        return 'Push Pull Legs';
-      case SplitType.upperLower:
-        return 'Upper Lower';
-      case SplitType.fullBody:
-        return 'Full Body';
-    }
-  }
-
-  String get description {
-    switch (this) {
-      case SplitType.pushPullLegs:
-        return '3–6 days. Each session targets related muscles. '
-            'Most popular split globally. Scales with you.';
-      case SplitType.upperLower:
-        return '4 days. Upper body and lower body alternate. '
-            'Great balance of volume and recovery.';
-      case SplitType.fullBody:
-        return '2–3 days. Every session works everything. '
-            'Best if time is limited.';
-    }
-  }
-
-  // Auto-assign split based on goal
-  static SplitType fromGoal(String goal) {
-    switch (goal) {
-      case 'muscle':
-        return SplitType.pushPullLegs;
-      case 'lean':
-        return SplitType.upperLower;
-      case 'fit':
-        return SplitType.fullBody;
-      default:
-        return SplitType.pushPullLegs;
-    }
-  }
-}
-
-// ── Schedule entry ─────────────────────────────────────────────────────────
-
 class ScheduleDay {
   final WeekDay day;
-  final String? routineName; // null = rest day
-  final bool isCompleted;
-  final bool isToday;
+  final String? routineName;
+  final bool    isCompleted;
 
   const ScheduleDay({
     required this.day,
     this.routineName,
     this.isCompleted = false,
-    this.isToday = false,
   });
 
   bool get isRest => routineName == null;
 
+  bool get isToday => day == WeekDay.fromDateTime(DateTime.now());
+
   ScheduleDay copyWith({
-    String? routineName,
-    bool? isCompleted,
-    bool? isToday,
-    bool setRest = false,
+    String?  routineName,
+    bool?    isCompleted,
+    bool     setRest = false,
   }) {
     return ScheduleDay(
-      day: day,
-      routineName: setRest ? null : (routineName ?? this.routineName),
-      isCompleted: isCompleted ?? this.isCompleted,
-      isToday: isToday ?? this.isToday,
+      day:          this.day,
+      routineName:  setRest ? null : (routineName ?? this.routineName),
+      isCompleted:  isCompleted ?? this.isCompleted,
     );
   }
 }
 
-// ── Split generator ────────────────────────────────────────────────────────
-// Pure function — takes a split type, returns a weekly schedule.
-// No Supabase, no Flutter, just logic.
-
 class SplitGenerator {
-  static List<ScheduleDay> generate(SplitType split) {
-    final today = WeekDay.fromDateTime(DateTime.now());
-    final schedule = _buildSchedule(split);
-
-    return WeekDay.values.map((day) {
-      final isPast = day.index < today.index;
-      final isToday = day == today;
-      final routineName = schedule[day];
-      final isRest = routineName == null;
-
-      // Past workout days are completed
-      // Past rest days are just past — not completed, not missed
-      // Today is not completed yet
-      // Future days are upcoming
-      final isCompleted = isPast && !isRest;
-
-      return ScheduleDay(
-        day: day,
-        routineName: routineName,
-        isToday: isToday,
-        isCompleted: isCompleted,
-      );
-    }).toList();
-  }
-
-  static Map<WeekDay, String?> _buildSchedule(SplitType split) {
-    switch (split) {
-      case SplitType.pushPullLegs:
-        // Mon Push / Tue Pull / Wed Legs / Thu Rest / Fri Push / Sat Pull / Sun Rest
-        return {
-          WeekDay.monday: 'Push Day',
-          WeekDay.tuesday: 'Pull Day',
-          WeekDay.wednesday: 'Legs Day',
-          WeekDay.thursday: null,
-          WeekDay.friday: 'Push Day',
-          WeekDay.saturday: 'Pull Day',
-          WeekDay.sunday: null,
-        };
-
-      case SplitType.upperLower:
-        // Mon Upper / Tue Lower / Wed Rest / Thu Upper / Fri Lower / Sat Rest / Sun Rest
-        return {
-          WeekDay.monday: 'Upper Body',
-          WeekDay.tuesday: 'Lower Body',
-          WeekDay.wednesday: null,
-          WeekDay.thursday: 'Upper Body',
-          WeekDay.friday: 'Lower Body',
-          WeekDay.saturday: null,
-          WeekDay.sunday: null,
-        };
-
-      case SplitType.fullBody:
-        // Mon Full / Tue Rest / Wed Full / Thu Rest / Fri Full / Sat Rest / Sun Rest
-        return {
-          WeekDay.monday: 'Full Body',
-          WeekDay.tuesday: null,
-          WeekDay.wednesday: 'Full Body',
-          WeekDay.thursday: null,
-          WeekDay.friday: 'Full Body',
-          WeekDay.saturday: null,
-          WeekDay.sunday: null,
-        };
+  /// Returns ordered ScheduleDay list for a given split label.
+  static List<ScheduleDay> generate(SplitLabel label) {
+    switch (label) {
+      case SplitLabel.pushPullLegs:
+        return [
+          const ScheduleDay(day: WeekDay.monday,    routineName: 'Push Day'),
+          const ScheduleDay(day: WeekDay.tuesday,   routineName: 'Pull Day'),
+          const ScheduleDay(day: WeekDay.wednesday, routineName: 'Legs Day'),
+          const ScheduleDay(day: WeekDay.thursday),
+          const ScheduleDay(day: WeekDay.friday,    routineName: 'Push Day'),
+          const ScheduleDay(day: WeekDay.saturday,  routineName: 'Pull Day'),
+          const ScheduleDay(day: WeekDay.sunday),
+        ];
+      case SplitLabel.upperLower:
+        return [
+          const ScheduleDay(day: WeekDay.monday,    routineName: 'Upper Body'),
+          const ScheduleDay(day: WeekDay.tuesday,   routineName: 'Lower Body'),
+          const ScheduleDay(day: WeekDay.wednesday),
+          const ScheduleDay(day: WeekDay.thursday,  routineName: 'Upper Body'),
+          const ScheduleDay(day: WeekDay.friday,    routineName: 'Lower Body'),
+          const ScheduleDay(day: WeekDay.saturday),
+          const ScheduleDay(day: WeekDay.sunday),
+        ];
+      case SplitLabel.fullBody:
+        return [
+          const ScheduleDay(day: WeekDay.monday,    routineName: 'Full Body A'),
+          const ScheduleDay(day: WeekDay.tuesday),
+          const ScheduleDay(day: WeekDay.wednesday, routineName: 'Full Body B'),
+          const ScheduleDay(day: WeekDay.thursday),
+          const ScheduleDay(day: WeekDay.friday,    routineName: 'Full Body A'),
+          const ScheduleDay(day: WeekDay.saturday),
+          const ScheduleDay(day: WeekDay.sunday),
+        ];
     }
   }
 
-  // Routine names for a given split — used to seed routines in Supabase
-  static List<String> routineNamesFor(SplitType split) {
-    switch (split) {
-      case SplitType.pushPullLegs:
-        return ['Push Day', 'Pull Day', 'Legs Day'];
-      case SplitType.upperLower:
-        return ['Upper Body', 'Lower Body'];
-      case SplitType.fullBody:
-        return ['Full Body'];
+  /// Returns unique routine names used by a split (for listing in My Routines).
+  static List<String> routineNamesFor(SplitLabel label) {
+    final schedule = generate(label);
+    final seen     = <String>{};
+    final result   = <String>[];
+    for (final sd in schedule) {
+      if (sd.routineName != null && seen.add(sd.routineName!)) {
+        result.add(sd.routineName!);
+      }
     }
+    return result;
   }
 }

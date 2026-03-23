@@ -1,293 +1,142 @@
+// lib/features/plan/widgets/today_card.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:layz/core/theme/app_colors.dart';
 import 'package:layz/features/plan/models/routine.dart';
 import 'package:layz/features/plan/models/split.dart';
-import 'package:layz/features/plan/services/tooltip_service.dart';
 
-class TodayCard extends StatefulWidget {
+class TodayCard extends StatelessWidget {
   const TodayCard({
     super.key,
     required this.scheduleDay,
-    this.routine,
-    required this.onStart,
+    required this.routine,
     required this.onTap,
+    required this.onStart,
   });
 
-  final ScheduleDay scheduleDay;
-  final Routine? routine;
-  final VoidCallback onStart;
+  final ScheduleDay  scheduleDay;
+  final Routine?     routine;
   final VoidCallback onTap;
-
-  @override
-  State<TodayCard> createState() => _TodayCardState();
-}
-
-class _TodayCardState extends State<TodayCard>
-    with SingleTickerProviderStateMixin {
-
-  bool _showTooltip = false;
-  late final AnimationController _tooltipCtrl;
-  late final Animation<double> _tooltipFade;
-
-  @override
-  void initState() {
-    super.initState();
-    _tooltipCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 400),
-    );
-    _tooltipFade = CurvedAnimation(
-      parent: _tooltipCtrl,
-      curve: Curves.easeOut,
-    );
-    _checkTooltip();
-  }
-
-  Future<void> _checkTooltip() async {
-    final shouldShow = await TooltipService.showOnce(TooltipKeys.planTapDay);
-    if (shouldShow && mounted) {
-      setState(() => _showTooltip = true);
-      _tooltipCtrl.forward();
-      // Auto-dismiss after 3 seconds
-      await Future.delayed(const Duration(milliseconds: 3000));
-      if (mounted) {
-        await _tooltipCtrl.reverse();
-        setState(() => _showTooltip = false);
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _tooltipCtrl.dispose();
-    super.dispose();
-  }
+  final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-
-        // Section label
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-          child: Text(
-            widget.scheduleDay.isToday ? 'TODAY' : widget.scheduleDay.day.full.toUpperCase(),
-            style: GoogleFonts.dmSans(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textSecondary,
-              letterSpacing: 2.5,
-            ),
-          ),
-        ),
-
-        // First-time tooltip
-        if (_showTooltip)
-          FadeTransition(
-            opacity: _tooltipFade,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
-              child: Text(
-                'Tap any day above to customise your plan.',
-                style: GoogleFonts.dmSans(
-                  fontSize: 12,
-                  color: AppColors.accent,
-                ),
-              ),
-            ),
-          ),
-
-        // Card
-        GestureDetector(
-          onTap: () {
-            HapticFeedback.lightImpact();
-            widget.onTap();
-          },
-          child: Container(
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.divider),
-            ),
-            child: widget.scheduleDay.isRest
-                ? _RestContent()
-                : _WorkoutContent(
-                    scheduleDay: widget.scheduleDay,
-                    routine: widget.routine,
-                    onStart: widget.onStart,
-                  ),
-          ),
-        ),
-      ],
+    if (scheduleDay.isRest) return const _RestCard();
+    return _WorkoutContent(
+      routineName: scheduleDay.routineName ?? '',
+      routine:     routine,
+      onTap:       onTap,
+      onStart:     onStart,
     );
   }
 }
 
-// ── Rest day content ───────────────────────────────────────────────────────
+class _RestCard extends StatelessWidget {
+  const _RestCard();
 
-class _RestContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.bedtime_outlined,
+              size: 24, color: AppColors.textSecondary),
+          const SizedBox(width: 14),
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                'Rest Day',
-                style: GoogleFonts.dmSans(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Recovery is part of the plan.',
-                style: GoogleFonts.dmSans(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
-              ),
+              Text('Rest Day',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 18, fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  )),
+              Text('Recovery is progress',
+                  style: GoogleFonts.dmSans(
+                    fontSize: 12, color: AppColors.textSecondary,
+                  )),
             ],
           ),
-        ),
-        // Rest icon
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.divider),
-          ),
-          child: const Icon(
-            Icons.bedtime_outlined,
-            color: AppColors.textSecondary,
-            size: 20,
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
-
-// ── Workout day content ────────────────────────────────────────────────────
 
 class _WorkoutContent extends StatelessWidget {
   const _WorkoutContent({
-    required this.scheduleDay,
+    required this.routineName,
     required this.routine,
+    required this.onTap,
     required this.onStart,
   });
 
-  final ScheduleDay scheduleDay;
-  final Routine? routine;
+  final String       routineName;
+  final Routine?     routine;
+  final VoidCallback onTap;
   final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
-    final r = routine;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-
-        Row(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Row(
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Routine name
-                  Text(
-                    scheduleDay.routineName ?? '—',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-
+                  Text(routineName,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 18, fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary, letterSpacing: -0.5,
+                      )),
                   const SizedBox(height: 4),
-
-                  // Muscle groups
-                  Text(
-                    r?.muscleGroupLabel ?? '—',
-                    style: GoogleFonts.dmSans(
-                      fontSize: 13,
-                      color: AppColors.textSecondary,
+                  if (routine != null)
+                    Text(
+                      '${routine!.exerciseCount} exercises · ${routine!.muscleGroupLabel}',
+                      style: GoogleFonts.dmSans(
+                        fontSize: 12, color: AppColors.textSecondary,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
-
-            // Exercise count badge
-            if (r != null)
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 6,
-                ),
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.mediumImpact();
+                onStart();
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                 decoration: BoxDecoration(
-                  color: AppColors.background,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.divider),
+                  color: AppColors.accent,
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  '${r.exerciseCount} exercises',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
+                child: Text('START WORKOUT', // ← FIXED TYPO
+                    style: GoogleFonts.dmSans(
+                      fontSize: 11, fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5, color: AppColors.background,
+                    )),
               ),
+            ),
           ],
         ),
-
-        const SizedBox(height: 16),
-
-        // Start button
-        GestureDetector(
-          onTap: onStart,
-          child: Container(
-            width: double.infinity,
-            height: 46,
-            decoration: BoxDecoration(
-              color: AppColors.accent,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  'START WORKOT',
-                  style: GoogleFonts.dmSans(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.background,
-                    letterSpacing: 2,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Icon(
-                  Icons.arrow_forward,
-                  color: AppColors.background,
-                  size: 16,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

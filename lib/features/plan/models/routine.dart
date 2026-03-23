@@ -1,75 +1,34 @@
-import 'package:layz/features/plan/models/exercise.dart';
-import 'package:layz/features/plan/models/workout_set.dart';
+// lib/features/plan/models/routine.dart
 
-// ── RoutineExercise — exercise inside a routine ────────────────────────────
-// Junction between a Routine and an Exercise.
-// Holds the sets, order, and any notes specific to this routine.
+import 'workout_set.dart';
+import 'exercise.dart';
 
 class RoutineExercise {
   final String id;
   final Exercise exercise;
-  final int order;           // drag-to-reorder position
+  final int order;
   final List<WorkoutSet> sets;
-  final String? notes;       // optional coaching note
+  final String? supersetWith; // id of next exercise if superset
 
   const RoutineExercise({
     required this.id,
     required this.exercise,
     required this.order,
     required this.sets,
-    this.notes,
+    this.supersetWith,
   });
 
-  // Warm up sets — auto-calculated, not stored
-  List<WorkoutSet> get warmUpSets =>
-      sets.where((s) => s.isWarmUp).toList();
-
-  // Working sets — what counts for volume
-  List<WorkoutSet> get workingSets =>
-      sets.where((s) => !s.isWarmUp).toList();
-
-  String get setsLabel {
-    final wuCount = warmUpSets.length;
-    final wsCount = workingSets.length;
-    if (wuCount > 0) {
-      return '$wuCount warm up · $wsCount sets';
-    }
-    return '$wsCount sets';
-  }
-
-  // Rep range label from first working set
-  String get repRangeLabel {
-    final ws = workingSets;
-    if (ws.isEmpty) return '';
-    final first = ws.first;
-    // All working sets should have same rep target
-    return '${first.reps ?? '—'} reps';
-  }
-
-  RoutineExercise copyWith({
-    int? order,
-    List<WorkoutSet>? sets,
-    String? notes,
-  }) {
-    return RoutineExercise(
-      id: id,
-      exercise: exercise,
-      order: order ?? this.order,
-      sets: sets ?? this.sets,
-      notes: notes ?? this.notes,
-    );
-  }
+  List<WorkoutSet> get warmUpSets => sets.where((s) => s.isWarmUp).toList();
+  List<WorkoutSet> get workingSets => sets.where((s) => !s.isWarmUp).toList();
 }
-
-// ── Routine ────────────────────────────────────────────────────────────────
 
 class Routine {
   final String id;
   final String userId;
-  final String name;           // "Push Day", "Pull Day" etc
+  final String name;
   final List<RoutineExercise> exercises;
   final DateTime createdAt;
-  final bool isGenerated;      // true = auto-generated, false = user-created
+  final bool isGenerated;
 
   const Routine({
     required this.id,
@@ -80,42 +39,33 @@ class Routine {
     this.isGenerated = false,
   });
 
-  // Primary muscle groups in this routine
-  List<MuscleGroup> get muscleGroups {
-    final groups = <MuscleGroup>{};
-    for (final re in exercises) {
-      groups.addAll(re.exercise.primaryMuscles);
-    }
-    return groups.toList();
-  }
-
-  String get muscleGroupLabel =>
-      muscleGroups.map((m) => m.label).join(' · ');
-
-  // Rough estimate — 3 min per working set + 1 min per exercise for setup
-  int get estimatedMinutes {
-    int sets = 0;
-    for (final re in exercises) {
-      sets += re.workingSets.length;
-    }
-    return (sets * 3) + exercises.length;
-  }
-
-  String get estimatedLabel => '~${estimatedMinutes} min';
-
   int get exerciseCount => exercises.length;
 
-  Routine copyWith({
-    String? name,
-    List<RoutineExercise>? exercises,
-  }) {
-    return Routine(
-      id: id,
-      userId: userId,
-      name: name ?? this.name,
-      exercises: exercises ?? this.exercises,
-      createdAt: createdAt,
-      isGenerated: isGenerated,
-    );
+  String get muscleGroupLabel {
+    if (exercises.isEmpty) return '';
+    final muscles = exercises
+        .map((e) => e.exercise.primaryMuscle.label)
+        .toSet()
+        .take(3)
+        .join(', ');
+    return muscles;
   }
+
+  String get estimatedLabel {
+    // ~1.5 min per working set (includes execution + rest overhead averaged)
+    // Warm-up sets counted at 0.75 min each
+    int workingSets = 0;
+    int warmUpSets = 0;
+    for (final re in exercises) {
+      workingSets += re.workingSets.length;
+      warmUpSets += re.warmUpSets.length;
+    }
+    final mins = (workingSets * 1.5 + warmUpSets * 0.75).round().clamp(10, 999);
+    if (mins < 60) return '~$mins min';
+    final h = mins ~/ 60;
+    final m = mins % 60;
+    return m == 0 ? '~${h}h' : '~${h}h ${m}m';
+  }
+
+  int get totalSets => exercises.fold(0, (sum, e) => sum + e.sets.length);
 }
