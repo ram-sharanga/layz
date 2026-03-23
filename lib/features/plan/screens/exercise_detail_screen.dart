@@ -1,8 +1,11 @@
+// lib/features/plan/screens/exercise_detail_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:layz/core/theme/app_colors.dart';
 import 'package:layz/features/plan/models/exercise.dart';
+import 'package:layz/features/plan/models/split.dart';
 import 'package:layz/features/plan/services/plan_service.dart';
 
 class ExerciseDetailScreen extends StatefulWidget {
@@ -24,7 +27,6 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
   int _currentSlide = 0;
   bool _isFavourited = false;
 
-  // Placeholder slide labels — replaced by real images from Supabase later
   static const _slideLabels = [
     'Starting position',
     'Form',
@@ -33,8 +35,7 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
     'What to avoid',
   ];
 
-  List<Exercise> get _substitutes =>
-      PlanService.getSubstitutes(widget.exercise);
+  List<Exercise> get _substitutes => PlanService.getSubstitutes(widget.exercise);
 
   @override
   void dispose() {
@@ -42,30 +43,44 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
     super.dispose();
   }
 
+  void _showAddToRoutine() {
+    HapticFeedback.mediumImpact();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (_) => _AddToRoutineSheet(
+        exercise: widget.exercise,
+        goal: widget.goal,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomPad = MediaQuery.of(context).padding.bottom;
     final topPad = MediaQuery.of(context).padding.top;
-    final repRange = widget.exercise.repRangeFor(widget.goal);
     final substitutes = _substitutes;
+    final slideCount = widget.exercise.imageUrls.isEmpty
+        ? _slideLabels.length
+        : widget.exercise.imageUrls.length;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
         children: [
 
-          // ── Content ──────────────────────────────────
+          // ── Scrollable content ────────────────────────────────────────────
           Expanded(
             child: CustomScrollView(
               slivers: [
 
-                // ── Image slideshow ──────────────────────
+                // ── Full-bleed image slideshow ────────────────────────────
                 SliverToBoxAdapter(
                   child: Stack(
                     children: [
-                      // Slides
                       SizedBox(
-                        height: 260,
+                        height: 280,
                         child: widget.exercise.imageUrls.isEmpty
                             ? _PlaceholderSlideshow(
                                 labels: _slideLabels,
@@ -86,9 +101,9 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                               ),
                       ),
 
-                      // Back button
+                      // Back button — floating over image
                       Positioned(
-                        top: topPad + 8,
+                        top: topPad + 10,
                         left: 16,
                         child: GestureDetector(
                           onTap: () => Navigator.of(context).pop(),
@@ -96,52 +111,77 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                             width: 36,
                             height: 36,
                             decoration: BoxDecoration(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(8),
+                              color: Colors.black.withValues(alpha: 0.55),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: Colors.white.withValues(alpha: 0.12),
+                              ),
                             ),
                             child: const Icon(
                               Icons.arrow_back,
                               color: Colors.white,
-                              size: 18,
+                              size: 17,
                             ),
                           ),
                         ),
                       ),
 
-                      // Dot indicators
+                      // Slide dots
                       Positioned(
-                        bottom: 12,
+                        bottom: 14,
                         left: 0,
                         right: 0,
-                        child: _DotIndicators(
-                          count: widget.exercise.imageUrls.isEmpty
-                              ? _slideLabels.length
-                              : widget.exercise.imageUrls.length,
+                        child: _SlideDots(
+                          count: slideCount,
                           current: _currentSlide,
+                        ),
+                      ),
+
+                      // Bottom fade into background
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        height: 60,
+                        child: IgnorePointer(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.bottomCenter,
+                                end: Alignment.topCenter,
+                                colors: [
+                                  AppColors.background,
+                                  Colors.transparent,
+                                ],
+                              ),
+                            ),
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-                // ── Name + tags ──────────────────────────
+                // ── Name + tags ───────────────────────────────────────────
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           widget.exercise.name,
                           style: GoogleFonts.dmSans(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 28,
+                            fontWeight: FontWeight.w900,
                             color: AppColors.textPrimary,
+                            letterSpacing: -1,
+                            height: 1.1,
                           ),
                         ),
                         const SizedBox(height: 10),
                         Wrap(
-                          spacing: 8,
+                          spacing: 7,
                           runSpacing: 6,
                           children: [
                             _InfoChip(
@@ -150,7 +190,13 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                             ),
                             _InfoChip(
                               label: widget.exercise.difficultyLabel,
-                              icon: Icons.bar_chart,
+                              icon: Icons.bar_chart_rounded,
+                            ),
+                            _InfoChip(
+                              label: widget.exercise.secondaryMuscles.isNotEmpty
+                                  ? 'Compound'
+                                  : 'Isolation',
+                              icon: Icons.hub_outlined,
                             ),
                           ],
                         ),
@@ -159,16 +205,17 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                   ),
                 ),
 
-                // ── Muscle groups ────────────────────────
+                // ── Muscles ───────────────────────────────────────────────
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _SectionLabel('MUSCLES'),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 14),
                         Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Expanded(
                               child: _MuscleColumn(
@@ -196,10 +243,10 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                   ),
                 ),
 
-                // ── Rep ranges ───────────────────────────
+                // ── Rep ranges ────────────────────────────────────────────
                 SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                    padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -227,11 +274,11 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                   ),
                 ),
 
-                // ── Substitutes ──────────────────────────
+                // ── Substitutes ───────────────────────────────────────────
                 if (substitutes.isNotEmpty)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                      padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -243,17 +290,18 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                                 'Alternatives',
                                 style: GoogleFonts.dmSans(
                                   fontSize: 12,
-                                  color: AppColors.accent,
+                                  color: AppColors.accent
+                                      .withValues(alpha: 0.7),
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           ...substitutes.map((s) => _SubstituteRow(
                                 exercise: s,
-                                onTap: () => Navigator.of(context)
-                                    .pushReplacement(
+                                onTap: () =>
+                                    Navigator.of(context).pushReplacement(
                                   MaterialPageRoute(
                                     builder: (_) => ExerciseDetailScreen(
                                       exercise: s,
@@ -267,21 +315,24 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                     ),
                   ),
 
-                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                const SliverToBoxAdapter(child: SizedBox(height: 110)),
               ],
             ),
           ),
 
-          // ── Fixed bottom action bar ──────────────────
+          // ── Bottom action bar ─────────────────────────────────────────────
           Container(
             padding: EdgeInsets.fromLTRB(20, 14, 20, bottomPad + 14),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: AppColors.background,
-              border: Border(top: BorderSide(color: AppColors.divider)),
+              border: Border(
+                top: BorderSide(
+                  color: Colors.white.withValues(alpha: 0.06),
+                ),
+              ),
             ),
             child: Row(
               children: [
-
                 // Favourite
                 GestureDetector(
                   onTap: () {
@@ -290,26 +341,26 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                   },
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
-                    width: 48,
-                    height: 48,
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
                       color: _isFavourited
-                          ? AppColors.accent.withValues(alpha: 0.12)
+                          ? AppColors.accent.withValues(alpha: 0.1)
                           : AppColors.surface,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(14),
                       border: Border.all(
                         color: _isFavourited
-                            ? AppColors.accent.withValues(alpha: 0.4)
-                            : AppColors.divider,
+                            ? AppColors.accent.withValues(alpha: 0.35)
+                            : Colors.white.withValues(alpha: 0.08),
                       ),
                     ),
                     child: Icon(
                       _isFavourited
-                          ? Icons.favorite
-                          : Icons.favorite_border,
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
                       color: _isFavourited
                           ? AppColors.accent
-                          : AppColors.textSecondary,
+                          : Colors.white.withValues(alpha: 0.3),
                       size: 20,
                     ),
                   ),
@@ -320,22 +371,19 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
                 // Add to routine
                 Expanded(
                   child: GestureDetector(
-                    onTap: () {
-                      HapticFeedback.mediumImpact();
-                      // TODO: show bottom sheet to pick which routine to add to
-                    },
+                    onTap: _showAddToRoutine,
                     child: Container(
-                      height: 48,
+                      height: 50,
                       decoration: BoxDecoration(
                         color: AppColors.accent,
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                       child: Center(
                         child: Text(
                           'ADD TO ROUTINE',
                           style: GoogleFonts.dmSans(
                             fontSize: 13,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                             letterSpacing: 1.5,
                             color: AppColors.background,
                           ),
@@ -353,8 +401,187 @@ class _ExerciseDetailScreenState extends State<ExerciseDetailScreen> {
   }
 }
 
+// ── Add to routine bottom sheet ────────────────────────────────────────────
+
+class _AddToRoutineSheet extends StatelessWidget {
+  const _AddToRoutineSheet({
+    required this.exercise,
+    required this.goal,
+  });
+
+  final Exercise exercise;
+  final String goal;
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+    final splitType = SplitLabel.fromGoal(goal);
+    final routineNames = SplitGenerator.routineNamesFor(splitType);
+
+    // TODO: append user-created routines from Supabase here once auth is wired
+    // final userRoutines = await PlanService.getUserRoutines(userId);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      padding: EdgeInsets.fromLTRB(24, 20, 24, bottomPad + 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Handle
+          Center(
+            child: Container(
+              width: 36,
+              height: 3,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          Text(
+            'Add to routine',
+            style: GoogleFonts.dmSans(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            exercise.name,
+            style: GoogleFonts.dmSans(
+              fontSize: 13,
+              color: AppColors.accent.withValues(alpha: 0.6),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Routine list
+          ...routineNames.map((name) => _RoutineRow(
+                name: name,
+                onTap: () {
+                  HapticFeedback.mediumImpact();
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Added to $name',
+                        style: GoogleFonts.dmSans(
+                          color: AppColors.background,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      backgroundColor: AppColors.accent,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                  // TODO: PlanService.addExerciseToRoutine(routineName: name, exercise: exercise)
+                },
+              )),
+
+          // Divider
+          Container(
+            height: 0.5,
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            color: Colors.white.withValues(alpha: 0.06),
+          ),
+
+          // Create new routine
+          _RoutineRow(
+            name: '+ Create new routine',
+            isCreate: true,
+            onTap: () {
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Coming soon',
+                    style: GoogleFonts.dmSans(
+                      color: AppColors.textPrimary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  backgroundColor: AppColors.surface,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoutineRow extends StatelessWidget {
+  const _RoutineRow({
+    required this.name,
+    required this.onTap,
+    this.isCreate = false,
+  });
+
+  final String name;
+  final VoidCallback onTap;
+  final bool isCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: Colors.white.withValues(alpha: 0.04),
+            ),
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                name,
+                style: GoogleFonts.dmSans(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: isCreate
+                      ? AppColors.accent.withValues(alpha: 0.7)
+                      : AppColors.textPrimary,
+                ),
+              ),
+            ),
+            if (!isCreate)
+              Icon(
+                Icons.add_rounded,
+                size: 18,
+                color: Colors.white.withValues(alpha: 0.2),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Placeholder slideshow ──────────────────────────────────────────────────
-// Shows labelled grey boxes until real images are loaded from Supabase
 
 class _PlaceholderSlideshow extends StatelessWidget {
   const _PlaceholderSlideshow({
@@ -382,15 +609,15 @@ class _PlaceholderSlideshow extends StatelessWidget {
           children: [
             Icon(
               Icons.image_outlined,
-              color: AppColors.textSecondary.withValues(alpha: 0.3),
-              size: 36,
+              color: Colors.white.withValues(alpha: 0.1),
+              size: 32,
             ),
             const SizedBox(height: 10),
             Text(
               labels[i],
               style: GoogleFonts.dmSans(
                 fontSize: 13,
-                color: AppColors.textSecondary.withValues(alpha: 0.5),
+                color: Colors.white.withValues(alpha: 0.25),
               ),
             ),
           ],
@@ -400,10 +627,10 @@ class _PlaceholderSlideshow extends StatelessWidget {
   }
 }
 
-// ── Dot indicators ─────────────────────────────────────────────────────────
+// ── Slide dots ─────────────────────────────────────────────────────────────
 
-class _DotIndicators extends StatelessWidget {
-  const _DotIndicators({required this.count, required this.current});
+class _SlideDots extends StatelessWidget {
+  const _SlideDots({required this.count, required this.current});
 
   final int count;
   final int current;
@@ -422,7 +649,7 @@ class _DotIndicators extends StatelessWidget {
           decoration: BoxDecoration(
             color: active
                 ? AppColors.accent
-                : Colors.white.withValues(alpha: 0.3),
+                : Colors.white.withValues(alpha: 0.25),
             borderRadius: BorderRadius.circular(3),
           ),
         );
@@ -439,14 +666,27 @@ class _SectionLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: GoogleFonts.dmSans(
-        fontSize: 10,
-        fontWeight: FontWeight.w600,
-        color: AppColors.textSecondary,
-        letterSpacing: 2.5,
-      ),
+    return Row(
+      children: [
+        Container(
+          width: 3,
+          height: 12,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15),
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          text,
+          style: GoogleFonts.dmSans(
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            color: Colors.white.withValues(alpha: 0.35),
+            letterSpacing: 2.5,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -462,22 +702,22 @@ class _InfoChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.divider),
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: AppColors.textSecondary),
+          Icon(icon, size: 12, color: Colors.white.withValues(alpha: 0.3)),
           const SizedBox(width: 5),
           Text(
             label,
             style: GoogleFonts.dmSans(
               fontSize: 12,
-              color: AppColors.textSecondary,
+              color: Colors.white.withValues(alpha: 0.5),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -487,7 +727,7 @@ class _InfoChip extends StatelessWidget {
   }
 }
 
-// ── Muscle group column ────────────────────────────────────────────────────
+// ── Muscle column ──────────────────────────────────────────────────────────
 
 class _MuscleColumn extends StatelessWidget {
   const _MuscleColumn({
@@ -509,22 +749,22 @@ class _MuscleColumn extends StatelessWidget {
           label,
           style: GoogleFonts.dmSans(
             fontSize: 9,
-            color: AppColors.textSecondary,
-            letterSpacing: 1.5,
-            fontWeight: FontWeight.w500,
+            color: Colors.white.withValues(alpha: 0.25),
+            letterSpacing: 2,
+            fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         ...muscles.map((m) => Padding(
-              padding: const EdgeInsets.only(bottom: 4),
+              padding: const EdgeInsets.only(bottom: 5),
               child: Text(
                 m,
                 style: GoogleFonts.dmSans(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                   color: isAccent
                       ? AppColors.textPrimary
-                      : AppColors.textSecondary,
+                      : Colors.white.withValues(alpha: 0.4),
                 ),
               ),
             )),
@@ -552,16 +792,16 @@ class _RepRangeRow extends StatelessWidget {
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: isCurrentGoal
-            ? AppColors.accent.withValues(alpha: 0.08)
-            : AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
+            ? AppColors.accent.withValues(alpha: 0.07)
+            : Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isCurrentGoal
-              ? AppColors.accent.withValues(alpha: 0.3)
-              : AppColors.divider,
+              ? AppColors.accent.withValues(alpha: 0.25)
+              : Colors.white.withValues(alpha: 0.06),
         ),
       ),
       child: Row(
@@ -583,10 +823,11 @@ class _RepRangeRow extends StatelessWidget {
                       ),
                     ),
                     if (isCurrentGoal) ...[
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 1,
+                          horizontal: 6,
+                          vertical: 2,
                         ),
                         decoration: BoxDecoration(
                           color: AppColors.accent,
@@ -605,12 +846,12 @@ class _RepRangeRow extends StatelessWidget {
                     ],
                   ],
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 3),
                 Text(
                   range!.note,
                   style: GoogleFonts.dmSans(
                     fontSize: 11,
-                    color: AppColors.textSecondary,
+                    color: Colors.white.withValues(alpha: 0.3),
                   ),
                 ),
               ],
@@ -619,11 +860,11 @@ class _RepRangeRow extends StatelessWidget {
           Text(
             '${range!.min}–${range!.max}',
             style: GoogleFonts.dmSans(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
               color: isCurrentGoal
                   ? AppColors.accent
-                  : AppColors.textPrimary,
+                  : Colors.white.withValues(alpha: 0.5),
             ),
           ),
         ],
@@ -644,8 +885,13 @@ class _SubstituteRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(color: Colors.white.withValues(alpha: 0.04)),
+          ),
+        ),
         child: Row(
           children: [
             Expanded(
@@ -656,23 +902,24 @@ class _SubstituteRow extends StatelessWidget {
                     exercise.name,
                     style: GoogleFonts.dmSans(
                       fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                       color: AppColors.textPrimary,
                     ),
                   ),
+                  const SizedBox(height: 2),
                   Text(
                     '${exercise.primaryMuscleLabel} · ${exercise.equipmentLabel}',
                     style: GoogleFonts.dmSans(
                       fontSize: 12,
-                      color: AppColors.textSecondary,
+                      color: Colors.white.withValues(alpha: 0.3),
                     ),
                   ),
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               Icons.chevron_right,
-              color: AppColors.textSecondary,
+              color: Colors.white.withValues(alpha: 0.2),
               size: 16,
             ),
           ],

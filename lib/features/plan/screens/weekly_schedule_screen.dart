@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:layz/core/theme/app_colors.dart';
@@ -8,6 +9,7 @@ import 'package:layz/features/plan/models/split.dart';
 import 'package:layz/features/plan/screens/exercise_library_screen.dart';
 import 'package:layz/features/plan/screens/routine_detail_screen.dart';
 import 'package:layz/features/plan/services/plan_service.dart';
+import 'package:layz/features/plan/screens/active_workout_screen.dart';
 
 class WeeklyScheduleScreen extends StatefulWidget {
   const WeeklyScheduleScreen({
@@ -76,6 +78,20 @@ class _WeeklyScheduleScreenState extends State<WeeklyScheduleScreen> {
     );
   }
 
+  void _startWorkout() {
+  final routine = _selectedRoutine;
+  if (routine == null) return;
+  HapticFeedback.mediumImpact();
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (_) => ActiveWorkoutScreen(
+        routine: routine,
+        goal: widget.goal,
+      ),
+    ),
+  );
+}
+
   ScheduleDay get _selectedSD =>
       _schedule.firstWhere((d) => d.day == _selectedDay);
 
@@ -114,7 +130,7 @@ class _WeeklyScheduleScreenState extends State<WeeklyScheduleScreen> {
                 routine: _selectedRoutine,
                 isToday: isToday,
                 onTap: _openRoutineDetail,
-                onStart: _openRoutineDetail,
+                onStart: _startWorkout,
               ),
             ],
           ),

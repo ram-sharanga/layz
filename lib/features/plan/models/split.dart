@@ -2,11 +2,7 @@
 
 // ── Enums ──────────────────────────────────────────────────────────────────
 
-enum SplitType {
-  pushPullLegs,
-  upperLower,
-  fullBody,
-}
+enum SplitType { pushPullLegs, upperLower, fullBody }
 
 enum WeekDay {
   monday,
@@ -29,36 +25,52 @@ enum WeekDay {
 extension WeekDayLabel on WeekDay {
   String get short {
     switch (this) {
-      case WeekDay.monday:    return 'Mon';
-      case WeekDay.tuesday:   return 'Tue';
-      case WeekDay.wednesday: return 'Wed';
-      case WeekDay.thursday:  return 'Thu';
-      case WeekDay.friday:    return 'Fri';
-      case WeekDay.saturday:  return 'Sat';
-      case WeekDay.sunday:    return 'Sun';
+      case WeekDay.monday:
+        return 'Mon';
+      case WeekDay.tuesday:
+        return 'Tue';
+      case WeekDay.wednesday:
+        return 'Wed';
+      case WeekDay.thursday:
+        return 'Thu';
+      case WeekDay.friday:
+        return 'Fri';
+      case WeekDay.saturday:
+        return 'Sat';
+      case WeekDay.sunday:
+        return 'Sun';
     }
   }
 
   String get full {
     switch (this) {
-      case WeekDay.monday:    return 'Monday';
-      case WeekDay.tuesday:   return 'Tuesday';
-      case WeekDay.wednesday: return 'Wednesday';
-      case WeekDay.thursday:  return 'Thursday';
-      case WeekDay.friday:    return 'Friday';
-      case WeekDay.saturday:  return 'Saturday';
-      case WeekDay.sunday:    return 'Sunday';
+      case WeekDay.monday:
+        return 'Monday';
+      case WeekDay.tuesday:
+        return 'Tuesday';
+      case WeekDay.wednesday:
+        return 'Wednesday';
+      case WeekDay.thursday:
+        return 'Thursday';
+      case WeekDay.friday:
+        return 'Friday';
+      case WeekDay.saturday:
+        return 'Saturday';
+      case WeekDay.sunday:
+        return 'Sunday';
     }
   }
-
 }
 
 extension SplitLabel on SplitType {
   String get name {
     switch (this) {
-      case SplitType.pushPullLegs: return 'Push Pull Legs';
-      case SplitType.upperLower:   return 'Upper Lower';
-      case SplitType.fullBody:     return 'Full Body';
+      case SplitType.pushPullLegs:
+        return 'Push Pull Legs';
+      case SplitType.upperLower:
+        return 'Upper Lower';
+      case SplitType.fullBody:
+        return 'Full Body';
     }
   }
 
@@ -79,10 +91,14 @@ extension SplitLabel on SplitType {
   // Auto-assign split based on goal
   static SplitType fromGoal(String goal) {
     switch (goal) {
-      case 'muscle': return SplitType.pushPullLegs;
-      case 'lean':   return SplitType.upperLower;
-      case 'fit':    return SplitType.fullBody;
-      default:       return SplitType.pushPullLegs;
+      case 'muscle':
+        return SplitType.pushPullLegs;
+      case 'lean':
+        return SplitType.upperLower;
+      case 'fit':
+        return SplitType.fullBody;
+      default:
+        return SplitType.pushPullLegs;
     }
   }
 }
@@ -124,19 +140,27 @@ class ScheduleDay {
 // No Supabase, no Flutter, just logic.
 
 class SplitGenerator {
-
   static List<ScheduleDay> generate(SplitType split) {
     final today = WeekDay.fromDateTime(DateTime.now());
-
     final schedule = _buildSchedule(split);
 
     return WeekDay.values.map((day) {
+      final isPast = day.index < today.index;
+      final isToday = day == today;
+      final routineName = schedule[day];
+      final isRest = routineName == null;
+
+      // Past workout days are completed
+      // Past rest days are just past — not completed, not missed
+      // Today is not completed yet
+      // Future days are upcoming
+      final isCompleted = isPast && !isRest;
+
       return ScheduleDay(
         day: day,
-        routineName: schedule[day],
-        isToday: day == today,
-        // TODO: REMOVE AFTER UI TESTING
-    isCompleted: day == WeekDay.monday || day == WeekDay.friday,
+        routineName: routineName,
+        isToday: isToday,
+        isCompleted: isCompleted,
       );
     }).toList();
   }
@@ -146,37 +170,37 @@ class SplitGenerator {
       case SplitType.pushPullLegs:
         // Mon Push / Tue Pull / Wed Legs / Thu Rest / Fri Push / Sat Pull / Sun Rest
         return {
-          WeekDay.monday:    'Push Day',
-          WeekDay.tuesday:   'Pull Day',
+          WeekDay.monday: 'Push Day',
+          WeekDay.tuesday: 'Pull Day',
           WeekDay.wednesday: 'Legs Day',
-          WeekDay.thursday:  null,
-          WeekDay.friday:    'Push Day',
-          WeekDay.saturday:  'Pull Day',
-          WeekDay.sunday:    null,
+          WeekDay.thursday: null,
+          WeekDay.friday: 'Push Day',
+          WeekDay.saturday: 'Pull Day',
+          WeekDay.sunday: null,
         };
 
       case SplitType.upperLower:
         // Mon Upper / Tue Lower / Wed Rest / Thu Upper / Fri Lower / Sat Rest / Sun Rest
         return {
-          WeekDay.monday:    'Upper Body',
-          WeekDay.tuesday:   'Lower Body',
+          WeekDay.monday: 'Upper Body',
+          WeekDay.tuesday: 'Lower Body',
           WeekDay.wednesday: null,
-          WeekDay.thursday:  'Upper Body',
-          WeekDay.friday:    'Lower Body',
-          WeekDay.saturday:  null,
-          WeekDay.sunday:    null,
+          WeekDay.thursday: 'Upper Body',
+          WeekDay.friday: 'Lower Body',
+          WeekDay.saturday: null,
+          WeekDay.sunday: null,
         };
 
       case SplitType.fullBody:
         // Mon Full / Tue Rest / Wed Full / Thu Rest / Fri Full / Sat Rest / Sun Rest
         return {
-          WeekDay.monday:    'Full Body',
-          WeekDay.tuesday:   null,
+          WeekDay.monday: 'Full Body',
+          WeekDay.tuesday: null,
           WeekDay.wednesday: 'Full Body',
-          WeekDay.thursday:  null,
-          WeekDay.friday:    'Full Body',
-          WeekDay.saturday:  null,
-          WeekDay.sunday:    null,
+          WeekDay.thursday: null,
+          WeekDay.friday: 'Full Body',
+          WeekDay.saturday: null,
+          WeekDay.sunday: null,
         };
     }
   }

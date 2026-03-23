@@ -7,11 +7,75 @@ import 'package:layz/features/plan/models/exercise.dart';
 import 'package:layz/features/plan/screens/exercise_detail_screen.dart';
 import 'package:layz/features/plan/services/plan_service.dart';
 
+// ── Filter state ───────────────────────────────────────────────────────────
+
+class _FilterState {
+  final Set<MuscleGroup> muscles = {};
+  final Set<Equipment> equipment = {};
+  final Set<_ExType> types = {};
+  final Set<Difficulty> difficulties = {};
+
+  bool get hasAny =>
+      muscles.isNotEmpty ||
+      equipment.isNotEmpty ||
+      types.isNotEmpty ||
+      difficulties.isNotEmpty;
+
+  int get count =>
+      muscles.length + equipment.length + types.length + difficulties.length;
+
+  void reset() {
+    muscles.clear();
+    equipment.clear();
+    types.clear();
+    difficulties.clear();
+  }
+
+  bool matches(Exercise ex) {
+    if (muscles.isNotEmpty && !ex.primaryMuscles.any(muscles.contains)) {
+      return false;
+    }
+    if (equipment.isNotEmpty && !equipment.contains(ex.equipment)) {
+      return false;
+    }
+    if (types.isNotEmpty) {
+      final isCompound = ex.secondaryMuscles.isNotEmpty;
+      final exType = isCompound ? _ExType.compound : _ExType.isolation;
+      if (!types.contains(exType)) return false;
+    }
+    if (difficulties.isNotEmpty && !difficulties.contains(ex.difficulty)) {
+      return false;
+    }
+    return true;
+  }
+}
+
+enum _ExType { compound, isolation }
+
+enum _FilterCat { muscle, equipment, type, difficulty }
+
+extension _FilterCatLabel on _FilterCat {
+  String get label {
+    switch (this) {
+      case _FilterCat.muscle:
+        return 'Muscle';
+      case _FilterCat.equipment:
+        return 'Equipment';
+      case _FilterCat.type:
+        return 'Type';
+      case _FilterCat.difficulty:
+        return 'Difficulty';
+    }
+  }
+}
+
+// ── Screen ─────────────────────────────────────────────────────────────────
+
 class ExerciseLibraryScreen extends StatefulWidget {
   const ExerciseLibraryScreen({
     super.key,
     required this.goal,
-    this.onExerciseAdded, // null = browse mode, non-null = add-to-routine mode
+    this.onExerciseAdded,
   });
 
   final String goal;
@@ -24,237 +88,423 @@ class ExerciseLibraryScreen extends StatefulWidget {
 }
 
 class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
-  final TextEditingController _search = TextEditingController();
-  MuscleGroup? _selectedMuscle;
-  Equipment? _selectedEquipment;
+  final TextEditingController _searchCtrl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  bool _searchFocused = false;
   String _query = '';
 
-  List<Exercise> get _filtered {
-    var list = PlanService.getAllExercises();
+  final _FilterState _filters = _FilterState();
+  _FilterCat? _openCat;
 
-    if (_query.isNotEmpty) {
-      list = list
-          .where((e) => e.name.toLowerCase().contains(_query.toLowerCase()))
-          .toList();
-    }
-
-    if (_selectedMuscle != null) {
-      list = list
-          .where((e) => e.primaryMuscles.contains(_selectedMuscle))
-          .toList();
-    }
-
-    if (_selectedEquipment != null) {
-      list = list
-          .where((e) => e.equipment == _selectedEquipment)
-          .toList();
-    }
-
-    return list;
+  @override
+  void initState() {
+    super.initState();
+    _searchFocus.addListener(() {
+      setState(() => _searchFocused = _searchFocus.hasFocus);
+    });
   }
 
   @override
   void dispose() {
-    _search.dispose();
+    _searchCtrl.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  List<Exercise> get _filtered {
+    final all = PlanService.getAllExercises();
+    return all.where((ex) {
+      if (_query.isNotEmpty &&
+          !ex.name.toLowerCase().contains(_query.toLowerCase())) {
+        return false;
+      }
+      return _filters.matches(ex);
+    }).toList();
+  }
+
+  void _toggleCat(_FilterCat cat) {
+    setState(() => _openCat = _openCat == cat ? null : cat);
+  }
+
+  void _resetAll() {
+    setState(() {
+      _filters.reset();
+      _openCat = null;
+    });
+  }
+
+  // ── Option chips for a given category ────────────────────────────────────
+
+  List<Widget> _buildOptions(_FilterCat cat) {
+    switch (cat) {
+      case _FilterCat.muscle:
+        return MuscleGroup.values
+            .map(
+              (m) => _OptionChip(
+                label: m.label,
+                selected: _filters.muscles.contains(m),
+                onTap: () => setState(() {
+                  if (_filters.muscles.contains(m)) {
+                    _filters.muscles.remove(m);
+                  } else {
+                    _filters.muscles.add(m);
+                  }
+                }),
+              ),
+            )
+            .toList();
+
+      case _FilterCat.equipment:
+        return Equipment.values
+            .map(
+              (e) => _OptionChip(
+                label: e.label,
+                selected: _filters.equipment.contains(e),
+                onTap: () => setState(() {
+                  if (_filters.equipment.contains(e)) {
+                    _filters.equipment.remove(e);
+                  } else {
+                    _filters.equipment.add(e);
+                  }
+                }),
+              ),
+            )
+            .toList();
+
+      case _FilterCat.type:
+        return _ExType.values
+            .map(
+              (t) => _OptionChip(
+                label: t == _ExType.compound ? 'Compound' : 'Isolation',
+                selected: _filters.types.contains(t),
+                onTap: () => setState(() {
+                  if (_filters.types.contains(t)) {
+                    _filters.types.remove(t);
+                  } else {
+                    _filters.types.add(t);
+                  }
+                }),
+              ),
+            )
+            .toList();
+
+      case _FilterCat.difficulty:
+        return Difficulty.values
+            .map(
+              (d) => _OptionChip(
+                label: d.label,
+                selected: _filters.difficulties.contains(d),
+                onTap: () => setState(() {
+                  if (_filters.difficulties.contains(d)) {
+                    _filters.difficulties.remove(d);
+                  } else {
+                    _filters.difficulties.add(d);
+                  }
+                }),
+              ),
+            )
+            .toList();
+    }
+  }
+
+  bool _catHasSelection(_FilterCat cat) {
+    switch (cat) {
+      case _FilterCat.muscle:
+        return _filters.muscles.isNotEmpty;
+      case _FilterCat.equipment:
+        return _filters.equipment.isNotEmpty;
+      case _FilterCat.type:
+        return _filters.types.isNotEmpty;
+      case _FilterCat.difficulty:
+        return _filters.difficulties.isNotEmpty;
+    }
+  }
+
+  List<({String label, VoidCallback onRemove})> get _activePills {
+    final pills = <({String label, VoidCallback onRemove})>[];
+    for (final m in _filters.muscles) {
+      pills.add((
+        label: m.label,
+        onRemove: () => setState(() => _filters.muscles.remove(m)),
+      ));
+    }
+    for (final e in _filters.equipment) {
+      pills.add((
+        label: e.label,
+        onRemove: () => setState(() => _filters.equipment.remove(e)),
+      ));
+    }
+    for (final t in _filters.types) {
+      pills.add((
+        label: t == _ExType.compound ? 'Compound' : 'Isolation',
+        onRemove: () => setState(() => _filters.types.remove(t)),
+      ));
+    }
+    for (final d in _filters.difficulties) {
+      pills.add((
+        label: d.label,
+        onRemove: () => setState(() => _filters.difficulties.remove(d)),
+      ));
+    }
+    return pills;
   }
 
   @override
   Widget build(BuildContext context) {
     final topPad = MediaQuery.of(context).padding.top;
     final filtered = _filtered;
+    final pills = _activePills;
 
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          // ── Header ──────────────────────────────────
-          Container(
-            padding: EdgeInsets.fromLTRB(20, topPad + 16, 20, 12),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.divider)),
-            ),
+          // ── Header ────────────────────────────────────────────────────────
+          Padding(
+            padding: EdgeInsets.fromLTRB(20, topPad + 16, 20, 14),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Back + title
                 Row(
                   children: [
                     GestureDetector(
                       onTap: () => Navigator.of(context).pop(),
-                      child: const Icon(
-                        Icons.arrow_back,
-                        color: AppColors.textPrimary,
-                        size: 22,
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: AppColors.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.divider),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back,
+                          color: AppColors.textPrimary,
+                          size: 18,
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 14),
                     Text(
                       widget.isAddMode ? 'Add Exercise' : 'Exercise Library',
                       style: GoogleFonts.dmSans(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary,
+                        letterSpacing: -0.5,
                       ),
                     ),
                   ],
                 ),
 
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
 
-                // Search bar
-                Container(
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: AppColors.surface,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.divider),
+                // Search bar — glass pill, lime focus border, no system ring
+                TextField(
+                  controller: _searchCtrl,
+                  focusNode: _searchFocus,
+                  style: GoogleFonts.dmSans(
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
                   ),
-                  child: Row(
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.only(left: 12),
-                        child: Icon(
-                          Icons.search,
-                          color: AppColors.textSecondary,
-                          size: 18,
-                        ),
-                      ),
-                      Expanded(
-                        child: TextField(
-                          controller: _search,
-                          style: GoogleFonts.dmSans(
-                            fontSize: 14,
-                            color: AppColors.textPrimary,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Search exercises...',
-                            hintStyle: GoogleFonts.dmSans(
-                              fontSize: 14,
-                              color: AppColors.textSecondary,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                            ),
-                          ),
-                          onChanged: (v) => setState(() => _query = v),
-                        ),
-                      ),
-                      if (_query.isNotEmpty)
-                        GestureDetector(
-                          onTap: () {
-                            _search.clear();
-                            setState(() => _query = '');
-                          },
-                          child: const Padding(
-                            padding: EdgeInsets.only(right: 12),
+                  decoration: InputDecoration(
+                    hintText: 'Search exercises...',
+                    hintStyle: GoogleFonts.dmSans(
+                      fontSize: 14,
+                      color: Colors.white.withValues(alpha: 0.22),
+                    ),
+                    filled: true,
+                    fillColor: Colors.white.withValues(alpha: 0.06),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      size: 18,
+                      color: _searchFocused
+                          ? AppColors.accent.withValues(alpha: 0.5)
+                          : Colors.white.withValues(alpha: 0.22),
+                    ),
+                    suffixIcon: _query.isNotEmpty
+                        ? GestureDetector(
+                            onTap: () {
+                              _searchCtrl.clear();
+                              setState(() => _query = '');
+                            },
                             child: Icon(
                               Icons.close,
-                              color: AppColors.textSecondary,
-                              size: 16,
+                              size: 15,
+                              color: Colors.white.withValues(alpha: 0.3),
                             ),
-                          ),
-                        ),
-                    ],
+                          )
+                        : null,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                    isDense: true,
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: BorderSide(
+                        color: AppColors.accent.withValues(alpha: 0.35),
+                      ),
+                    ),
                   ),
+                  onChanged: (v) => setState(() => _query = v),
                 ),
               ],
             ),
           ),
 
-          // ── Muscle filter chips ──────────────────────
+          // ── Category tabs ─────────────────────────────────────────────────
           SizedBox(
-            height: 44,
+            height: 36,
             child: ListView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
               children: [
-                _FilterChip(
-                  label: 'All',
-                  selected: _selectedMuscle == null &&
-                      _selectedEquipment == null,
-                  onTap: () => setState(() {
-                    _selectedMuscle = null;
-                    _selectedEquipment = null;
-                  }),
+                // All / reset tab
+                _CatTab(
+                  label: _filters.hasAny ? 'All  ${_filters.count}' : 'All',
+                  isActive: !_filters.hasAny && _openCat == null,
+                  hasSelection: false,
+                  onTap: _resetAll,
                 ),
-                ...MuscleGroup.values.map((m) => _FilterChip(
-                      label: m.label,
-                      selected: _selectedMuscle == m,
-                      onTap: () => setState(() {
-                        _selectedMuscle =
-                            _selectedMuscle == m ? null : m;
-                        _selectedEquipment = null;
-                      }),
-                    )),
+                const SizedBox(width: 6),
+                ..._FilterCat.values.map((cat) {
+                  final isOpen = _openCat == cat;
+                  final hasSel = _catHasSelection(cat);
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: _CatTab(
+                      label: cat.label,
+                      isActive: isOpen,
+                      hasSelection: hasSel && !isOpen,
+                      onTap: () => _toggleCat(cat),
+                    ),
+                  );
+                }),
               ],
             ),
           ),
 
-          // ── Equipment filter chips ───────────────────
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-              children: Equipment.values.map((eq) => _FilterChip(
-                    label: eq.label,
-                    selected: _selectedEquipment == eq,
-                    onTap: () => setState(() {
-                      _selectedEquipment =
-                          _selectedEquipment == eq ? null : eq;
-                      _selectedMuscle = null;
-                    }),
-                  )).toList(),
-            ),
+          // ── Options panel — fixed height, horizontal scroll ───────────────
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeInOut,
+            height: _openCat != null ? 50 : 0,
+            child: _openCat != null
+                ? ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                    children: _buildOptions(_openCat!),
+                  )
+                : const SizedBox.shrink(),
           ),
 
-          const SizedBox(height: 4),
+          // ── Divider ───────────────────────────────────────────────────────
+          Container(
+            height: 0.5,
+            margin: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+            color: Colors.white.withValues(alpha: 0.06),
+          ),
 
-          // ── Results count ────────────────────────────
+          // ── Results count + active pills ──────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
             child: Row(
               children: [
                 Text(
-                  '${filtered.length} exercises',
+                  '${filtered.length} exercise${filtered.length != 1 ? 's' : ''}',
                   style: GoogleFonts.dmSans(
                     fontSize: 11,
-                    color: AppColors.textSecondary,
-                    letterSpacing: 0.5,
+                    color: Colors.white.withValues(alpha: 0.3),
+                    letterSpacing: 0.3,
                   ),
                 ),
               ],
             ),
           ),
 
-          // ── Exercise list ────────────────────────────
+          if (pills.isNotEmpty)
+            SizedBox(
+              height: 34,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),
+                children: pills
+                    .map(
+                      (p) => Padding(
+                        padding: const EdgeInsets.only(right: 6),
+                        child: GestureDetector(
+                          onTap: p.onRemove,
+                          child: Container(
+                            padding: const EdgeInsets.fromLTRB(10, 3, 8, 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppColors.accent.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  p.label,
+                                  style: GoogleFonts.dmSans(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.accent,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.close,
+                                  size: 11,
+                                  color: AppColors.accent.withValues(
+                                    alpha: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ),
+
+          const SizedBox(height: 4),
+
+          // ── Exercise list ─────────────────────────────────────────────────
           Expanded(
             child: filtered.isEmpty
-                ? _EmptyState(query: _query)
+                ? _EmptyState(query: _query, hasFilters: _filters.hasAny)
                 : ListView.separated(
                     padding: const EdgeInsets.only(bottom: 40),
                     itemCount: filtered.length,
-                    separatorBuilder: (_, __) => const Divider(
-                      height: 1,
-                      indent: 20,
-                      color: AppColors.divider,
+                    separatorBuilder: (_, __) => Container(
+                      height: 0.5,
+                      margin: const EdgeInsets.symmetric(horizontal: 20),
+                      color: Colors.white.withValues(alpha: 0.04),
                     ),
                     itemBuilder: (context, i) {
-                      final exercise = filtered[i];
-                      return _ExerciseListTile(
-                        exercise: exercise,
+                      final ex = filtered[i];
+                      return _ExerciseTile(
+                        exercise: ex,
                         goal: widget.goal,
                         isAddMode: widget.isAddMode,
                         onTap: () {
                           if (widget.isAddMode) {
-                            widget.onExerciseAdded!(exercise);
+                            widget.onExerciseAdded!(ex);
                           } else {
                             Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) => ExerciseDetailScreen(
-                                  exercise: exercise,
+                                  exercise: ex,
                                   goal: widget.goal,
                                 ),
                               ),
@@ -271,10 +521,68 @@ class _ExerciseLibraryScreenState extends State<ExerciseLibraryScreen> {
   }
 }
 
-// ── Filter chip ────────────────────────────────────────────────────────────
+// ── Category tab ───────────────────────────────────────────────────────────
 
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
+class _CatTab extends StatelessWidget {
+  const _CatTab({
+    required this.label,
+    required this.isActive,
+    required this.hasSelection,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isActive;
+  final bool hasSelection;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    Color bg;
+    Color border;
+    Color textColor;
+
+    if (isActive) {
+      bg = AppColors.accent;
+      border = AppColors.accent;
+      textColor = AppColors.background;
+    } else if (hasSelection) {
+      bg = AppColors.accent.withValues(alpha: 0.08);
+      border = AppColors.accent.withValues(alpha: 0.3);
+      textColor = AppColors.accent;
+    } else {
+      bg = Colors.transparent;
+      border = Colors.white.withValues(alpha: 0.1);
+      textColor = Colors.white.withValues(alpha: 0.45);
+    }
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: border),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.dmSans(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: textColor,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Option chip ────────────────────────────────────────────────────────────
+
+class _OptionChip extends StatelessWidget {
+  const _OptionChip({
     required this.label,
     required this.selected,
     required this.onTap,
@@ -289,22 +597,28 @@ class _FilterChip extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        duration: const Duration(milliseconds: 150),
+        margin: const EdgeInsets.only(right: 7),
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 5),
         decoration: BoxDecoration(
-          color: selected ? AppColors.accent : AppColors.surface,
+          color: selected
+              ? AppColors.accent
+              : Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? AppColors.accent : AppColors.divider,
+            color: selected
+                ? AppColors.accent
+                : Colors.white.withValues(alpha: 0.1),
           ),
         ),
         child: Text(
           label,
           style: GoogleFonts.dmSans(
             fontSize: 12,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-            color: selected ? AppColors.background : AppColors.textSecondary,
+            fontWeight: FontWeight.w600,
+            color: selected
+                ? AppColors.background
+                : Colors.white.withValues(alpha: 0.5),
           ),
         ),
       ),
@@ -312,10 +626,10 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-// ── Exercise list tile ─────────────────────────────────────────────────────
+// ── Exercise tile ──────────────────────────────────────────────────────────
 
-class _ExerciseListTile extends StatelessWidget {
-  const _ExerciseListTile({
+class _ExerciseTile extends StatelessWidget {
+  const _ExerciseTile({
     required this.exercise,
     required this.goal,
     required this.isAddMode,
@@ -330,6 +644,7 @@ class _ExerciseListTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repRange = exercise.repRangeFor(goal);
+    final isCompound = exercise.secondaryMuscles.isNotEmpty;
 
     return GestureDetector(
       onTap: onTap,
@@ -338,8 +653,6 @@ class _ExerciseListTile extends StatelessWidget {
         color: AppColors.background,
         child: Row(
           children: [
-
-            // Exercise info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -352,38 +665,36 @@ class _ExerciseListTile extends StatelessWidget {
                       color: AppColors.textPrimary,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
+                  const SizedBox(height: 5),
+                  Wrap(
+                    spacing: 5,
+                    runSpacing: 4,
                     children: [
-                      _Tag(label: exercise.primaryMuscleLabel),
-                      const SizedBox(width: 6),
+                      _Tag(label: exercise.primaryMuscleLabel, isAccent: true),
                       _Tag(label: exercise.equipmentLabel),
-                      const SizedBox(width: 6),
-                      _Tag(
-                        label: exercise.difficultyLabel,
-                        isAccent: exercise.difficulty == Difficulty.beginner,
-                      ),
+                      _Tag(label: isCompound ? 'Compound' : 'Isolation'),
+                      _Tag(label: exercise.difficultyLabel),
                     ],
                   ),
                   if (repRange != null) ...[
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 5),
                     Text(
                       '${repRange.min}–${repRange.max} reps for your goal',
                       style: GoogleFonts.dmSans(
                         fontSize: 11,
-                        color: AppColors.textSecondary
-                            .withValues(alpha: 0.6),
+                        color: Colors.white.withValues(alpha: 0.25),
                       ),
                     ),
                   ],
                 ],
               ),
             ),
-
-            // Action icon
+            const SizedBox(width: 12),
             Icon(
               isAddMode ? Icons.add_circle_outline : Icons.chevron_right,
-              color: isAddMode ? AppColors.accent : AppColors.textSecondary,
+              color: isAddMode
+                  ? AppColors.accent
+                  : Colors.white.withValues(alpha: 0.2),
               size: isAddMode ? 22 : 18,
             ),
           ],
@@ -393,7 +704,7 @@ class _ExerciseListTile extends StatelessWidget {
   }
 }
 
-// ── Small tag pill ─────────────────────────────────────────────────────────
+// ── Tag pill ───────────────────────────────────────────────────────────────
 
 class _Tag extends StatelessWidget {
   const _Tag({required this.label, this.isAccent = false});
@@ -407,13 +718,13 @@ class _Tag extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
         color: isAccent
-            ? AppColors.accent.withValues(alpha: 0.12)
-            : AppColors.surface,
+            ? AppColors.accent.withValues(alpha: 0.08)
+            : Colors.white.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(4),
         border: Border.all(
           color: isAccent
-              ? AppColors.accent.withValues(alpha: 0.3)
-              : AppColors.divider,
+              ? AppColors.accent.withValues(alpha: 0.2)
+              : Colors.white.withValues(alpha: 0.06),
         ),
       ),
       child: Text(
@@ -421,7 +732,9 @@ class _Tag extends StatelessWidget {
         style: GoogleFonts.dmSans(
           fontSize: 10,
           fontWeight: FontWeight.w500,
-          color: isAccent ? AppColors.accent : AppColors.textSecondary,
+          color: isAccent
+              ? AppColors.accent.withValues(alpha: 0.8)
+              : Colors.white.withValues(alpha: 0.35),
         ),
       ),
     );
@@ -431,34 +744,48 @@ class _Tag extends StatelessWidget {
 // ── Empty state ────────────────────────────────────────────────────────────
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.query});
+  const _EmptyState({required this.query, required this.hasFilters});
+
   final String query;
+  final bool hasFilters;
 
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'No exercises found',
-            style: GoogleFonts.dmSans(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textSecondary,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.search_off_rounded,
+              size: 32,
+              color: Colors.white.withValues(alpha: 0.12),
             ),
-          ),
-          if (query.isNotEmpty) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 12),
             Text(
-              'Try a different search term',
+              'No exercises found',
               style: GoogleFonts.dmSans(
-                fontSize: 13,
-                color: AppColors.textSecondary.withValues(alpha: 0.5),
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.3),
               ),
             ),
+            if (query.isNotEmpty || hasFilters) ...[
+              const SizedBox(height: 6),
+              Text(
+                hasFilters
+                    ? 'Try removing some filters'
+                    : 'Try a different search term',
+                style: GoogleFonts.dmSans(
+                  fontSize: 13,
+                  color: Colors.white.withValues(alpha: 0.18),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

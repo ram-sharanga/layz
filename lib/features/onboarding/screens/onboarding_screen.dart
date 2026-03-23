@@ -11,8 +11,8 @@ import 'package:layz/features/home/home_screen.dart';
 
 class OnboardingData {
   int? age;
-  String? bio;    // 'male' | 'female' | 'other'
-  String? goal;   // 'lean' | 'muscle' | 'fit'
+  String? bio; // 'male' | 'female' | 'other'
+  String? goal; // 'lean' | 'muscle' | 'fit'
 }
 
 class OnboardingScreen extends StatefulWidget {
@@ -24,7 +24,6 @@ class OnboardingScreen extends StatefulWidget {
 
 class _OnboardingScreenState extends State<OnboardingScreen>
     with SingleTickerProviderStateMixin {
-
   final OnboardingData _data = OnboardingData();
 
   late final FixedExtentScrollController _ageController;
@@ -89,120 +88,122 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final topPad = mq.padding.top;
     final screenH = mq.size.height;
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      body: Padding(
-        padding: EdgeInsets.fromLTRB(20, topPad + 20, 20, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-
-            // Header
-            Text(
-              'Tell us about\nyourself.',
-              style: GoogleFonts.dmSans(
-                fontSize: 26,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
-                height: 1.2,
+    return SafeArea(
+      top: false,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        body: Padding(
+          padding: EdgeInsets.fromLTRB(20, topPad + 20, 20, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Text(
+                'Tell us about\nyourself.',
+                style: GoogleFonts.dmSans(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                  height: 1.2,
+                ),
               ),
-            ),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 20),
 
-            // ── Top row: Age + Bio ────────────────────────
-            SizedBox(
-              height: screenH * 0.27,
-              child: Row(
+              // ── Top row: Age + Bio ────────────────────────
+              SizedBox(
+                height: screenH * 0.27,
+                child: Row(
+                  children: [
+                    // Age
+                    Expanded(
+                      flex: 4,
+                      child: _AgeBox(
+                        controller: _ageController,
+                        minAge: _minAge,
+                        maxAge: _maxAge,
+                        onChanged: (v) => setState(() => _data.age = v),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    // Bio
+                    Expanded(
+                      flex: 6,
+                      child: _BioBox(
+                        selected: _data.bio,
+                        onSelected: (v) {
+                          setState(() => _data.bio = v);
+                          HapticFeedback.lightImpact();
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // ── Goal label ────────────────────────────────
+              Text(
+                'YOUR GOAL',
+                style: GoogleFonts.dmSans(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                  letterSpacing: 2.5,
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // ── Goal tiles ────────────────────────────────
+              Row(
                 children: [
-                  // Age
-                  Expanded(
-                    flex: 4,
-                    child: _AgeBox(
-                      controller: _ageController,
-                      minAge: _minAge,
-                      maxAge: _maxAge,
-                      onChanged: (v) => setState(() => _data.age = v),
-                    ),
+                  _GoalTile(
+                    label: 'Get lean',
+                    sub: 'Burn fat',
+                    value: 'lean',
+                    selected: _data.goal == 'lean',
+                    onTap: () => _selectGoal('lean'),
                   ),
-                  const SizedBox(width: 10),
-                  // Bio
-                  Expanded(
-                    flex: 6,
-                    child: _BioBox(
-                      selected: _data.bio,
-                      onSelected: (v) {
-                        setState(() => _data.bio = v);
-                        HapticFeedback.lightImpact();
-                      },
-                    ),
+                  const SizedBox(width: 8),
+                  _GoalTile(
+                    label: 'Build muscle',
+                    sub: 'Get strong',
+                    value: 'muscle',
+                    selected: _data.goal == 'muscle',
+                    onTap: () => _selectGoal('muscle'),
+                  ),
+                  const SizedBox(width: 8),
+                  _GoalTile(
+                    label: 'Get fit',
+                    sub: 'Stay active',
+                    value: 'fit',
+                    selected: _data.goal == 'fit',
+                    onTap: () => _selectGoal('fit'),
                   ),
                 ],
               ),
-            ),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
-            // ── Goal label ────────────────────────────────
-            Text(
-              'YOUR GOAL',
-              style: GoogleFonts.dmSans(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary,
-                letterSpacing: 2.5,
+              // ── Motivation message ────────────────────────
+              FadeTransition(
+                opacity: _motiveFade,
+                child: SlideTransition(
+                  position: _motiveSlide,
+                  child: const _Motivation(),
+                ),
               ),
-            ),
 
-            const SizedBox(height: 10),
+              const Spacer(),
 
-            // ── Goal tiles ────────────────────────────────
-            Row(
-              children: [
-                _GoalTile(
-                  label: 'Get lean',
-                  sub: 'Burn fat',
-                  value: 'lean',
-                  selected: _data.goal == 'lean',
-                  onTap: () => _selectGoal('lean'),
-                ),
-                const SizedBox(width: 8),
-                _GoalTile(
-                  label: 'Build muscle',
-                  sub: 'Get strong',
-                  value: 'muscle',
-                  selected: _data.goal == 'muscle',
-                  onTap: () => _selectGoal('muscle'),
-                ),
-                const SizedBox(width: 8),
-                _GoalTile(
-                  label: 'Get fit',
-                  sub: 'Stay active',
-                  value: 'fit',
-                  selected: _data.goal == 'fit',
-                  onTap: () => _selectGoal('fit'),
-                ),
-              ],
-            ),
+              // ── CTA ──────────────────────────────────────
+              _CtaButton(enabled: _canProceed, onTap: _proceed),
 
-            const SizedBox(height: 18),
-
-            // ── Motivation message ────────────────────────
-            FadeTransition(
-              opacity: _motiveFade,
-              child: SlideTransition(
-                position: _motiveSlide,
-                child: const _Motivation(),
-              ),
-            ),
-
-            const Spacer(),
-
-            // ── CTA ──────────────────────────────────────
-            _CtaButton(enabled: _canProceed, onTap: _proceed),
-
-            const SizedBox(height: 32),
-          ],
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
       ),
     );
@@ -278,7 +279,10 @@ class _AgeBox extends StatelessWidget {
 
           // Top fade-out
           Positioned(
-            top: 0, left: 0, right: 0, height: 60,
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 60,
             child: IgnorePointer(
               child: Container(
                 decoration: BoxDecoration(
@@ -297,7 +301,10 @@ class _AgeBox extends StatelessWidget {
 
           // Bottom fade-out + label
           Positioned(
-            bottom: 0, left: 0, right: 0, height: 60,
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 60,
             child: IgnorePointer(
               child: Container(
                 decoration: BoxDecoration(
@@ -341,9 +348,9 @@ class _BioBox extends StatelessWidget {
   final ValueChanged<String> onSelected;
 
   static const _opts = [
-    ('male',   'Male'),
+    ('male', 'Male'),
     ('female', 'Female'),
-    ('other',  'Prefer not to say'),
+    ('other', 'Prefer not to say'),
   ];
 
   @override
@@ -381,9 +388,7 @@ class _BioBox extends StatelessWidget {
                     color: active ? AppColors.accent : Colors.transparent,
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(
-                      color: active
-                          ? AppColors.accent
-                          : AppColors.divider,
+                      color: active ? AppColors.accent : AppColors.divider,
                     ),
                   ),
                   alignment: Alignment.center,
@@ -391,9 +396,7 @@ class _BioBox extends StatelessWidget {
                     opt.$2,
                     style: GoogleFonts.dmSans(
                       fontSize: 12,
-                      fontWeight: active
-                          ? FontWeight.w600
-                          : FontWeight.w400,
+                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                       color: active
                           ? AppColors.background
                           : AppColors.textSecondary,
@@ -486,9 +489,7 @@ class _Motivation extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.only(left: 14),
       decoration: const BoxDecoration(
-        border: Border(
-          left: BorderSide(color: AppColors.accent, width: 2),
-        ),
+        border: Border(left: BorderSide(color: AppColors.accent, width: 2)),
       ),
       child: RichText(
         text: TextSpan(
@@ -508,7 +509,8 @@ class _Motivation extends StatelessWidget {
               ),
             ),
             const TextSpan(
-              text: ' for three weeks and your body starts '
+              text:
+                  ' for three weeks and your body starts '
                   'rewarding you. By 90 days — you\'ll see it, '
                   'feel it, own it.\n',
             ),
@@ -557,9 +559,7 @@ class _CtaButton extends StatelessWidget {
               fontSize: 13,
               fontWeight: FontWeight.w700,
               letterSpacing: 3.5,
-              color: enabled
-                  ? AppColors.background
-                  : AppColors.textSecondary,
+              color: enabled ? AppColors.background : AppColors.textSecondary,
             ),
           ),
         ),
